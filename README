@@ -1,0 +1,13 @@
+This is python code to simulate whole-genome relatedness among a sample of individuals in populations exchanging migrants and changing sizes.
+It works in discrete (nonoverlapping) generations, uses diploid individuals, and makes no further approximations.
+It simulates in reverse time.
+The running time is strongly dependent on the effective population size -- 
+N_e greater that ten thousand or so for more than 50 generations might take prohibitively long (i.e. weeks),
+unless the genome is short.
+
+coalpedigree.py -- module
+sim-ibd-pedigree.py -- a script to run it
+sim-demographics-2.py -- an example input file for sim-ibd-pedigree.py
+test-pedigree-sims.py -- various unordered examples for cutting and pasting into the interpreter.
+
+This is not well documented, but is simple, and might be useful to someone.
