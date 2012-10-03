@@ -11,3 +11,15 @@ sim-demographics-2.py -- an example input file for sim-ibd-pedigree.py
 test-pedigree-sims.py -- various unordered examples for cutting and pasting into the interpreter.
 
 This is not well documented, but is simple, and might be useful to someone.
+
+------------------------
+
+To cite this software, please cite
+
+@MISC{ralph2012coalpedigree
+author = {Ralph, Peter},
+title = {coalpedigree: {Reverse}-time, whole-geneome simulation},
+month = Oct,
+year = {2012},
+url = {https://github.com/petrelharp/coalpedigree}
+}
