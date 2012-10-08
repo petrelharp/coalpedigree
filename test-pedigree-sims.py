@@ -2,7 +2,7 @@ import sys
 import time
 import math
 
-sys.path.append('/home/peter/projects/genome')
+sys.path.append('/home/peter/projects/coalpedigree')
 import coalpedigree as coal
 
 reload(coal)
@@ -21,7 +21,7 @@ for t in xrange(40):
 
 print time.time()-start
 
-coal.writeibd(ibdict,filename="test.fibd.gz",writeinfo=True)
+coal.writecoal(ibdict,filename="test.fibd.gz")
 
 
 ## Do migration and expanding populations

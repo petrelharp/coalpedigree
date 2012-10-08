@@ -14,10 +14,12 @@ from optparse import OptionParser
 import coalpedigree as coal
 import re
 import time
+import subprocess
 
 
 parser = OptionParser(description=description)
 parser.add_option("-o","--outfile",dest="outfile",help="name of output file (or '-' for stdout)",default="-")
+parser.add_option("-p","--popfile",dest="popfile",help="name of file to write final population state to (or '-' for stdout)",default="-")
 parser.add_option("-l","--logfile",dest="logfile",help="name of log file (or '-' for stdout)",default="-")
 parser.add_option("-i","--infile",dest="infile",help="name of input file to get parameters from (or '-' for stdin)")
 parser.add_option("-t","--ngens",dest="ngens",help="total number of generations to simulate",default="10")
@@ -35,6 +37,7 @@ if options.infile is not None:
 
 # command line options supercede statements in infile
 outfile = coal.fileopt(options.outfile, "w")
+popfile = coal.fileopt(options.popfile, "w")
 logfile = coal.fileopt(options.logfile, "w")
 ngens = int(options.ngens)
 
@@ -71,14 +74,20 @@ subpopnames = pop.keys()
 if (not set(mignames) == set(ancnenames)) or (not set(subpopnames) == set(ancnenames) ):
     raise TypeError("Inconsistent population names -- using command-line samplesizes?")
 
-logfile.write("sim-ibd-pedigree.py" + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n")
+# record "version number"
+githash, giterr = subprocess.Popen(["git",'rev-parse','HEAD'], stdout=subprocess.PIPE).communicate()
+if giterr:
+    githash = ""
+logfile.write("sim-ibd-pedigree.py -- " + githash + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n")
 logfile.write("\n")
 logfile.write("output: " + str(options.outfile)+"\n")
+logfile.write("final population state: " + str(options.popfile)+"\n")
 logfile.write("input: " + str(options.infile)+"\n")
 logfile.write("ngens: " + str(ngens)+"\n")
 logfile.write("sampsizes: " + str(sampsizes)+"\n")
 logfile.write("Ne at 1: " + str(ancnefn(pop,t=1))+"\n")
 logfile.write("migprob at 1: " + str(migprobs(pop,t=1))+"\n")
+logfile.write("chromosome ending positions: " + str(list(coal.chrpos)+[coal.chrlen]) + "\n")
 logfile.write("\n")
 logfile.write("Beginning ------------\n")
 
@@ -90,8 +99,11 @@ for t in xrange(ngens):
     pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t),writeto=outfile)
     pop = coal.migrate(pop,migprobs=migprobs(pop,t))
 
+popfile.write( str(pop) )
+
 logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("\n")
 logfile.write("All done at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n" )
 outfile.close()
+popfile.close()
 logfile.close()

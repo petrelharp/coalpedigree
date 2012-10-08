@@ -26,6 +26,7 @@ import sys
 import bisect
 
 # chrlen = 1.0 # chromosome length
+# Default: human chromosome lengths (almost all of them)
 chrlens = ( 2.6200830, 2.4403647, 2.0997332, 1.9748005, 1.8958412, 1.7470526, 1.7235610, 1.5652810, 1.4628861, 1.6040336, 1.4388007, 1.5640816, 1.1934065, 1.0483476, 1.1093523, 1.1868929, 1.1961966, 1.0574726, 0.9257134, 0.8362057, 0.5479314, 0.5559191 )  # chromosome lengths (in Morgans)
 chrpos = tuple( [ sum( chrlens[0:k] ) for k in range(1,len(chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 chrlen = sum(chrlens)  # the last one (total length)
@@ -187,16 +188,24 @@ def crossover(chrom):
             copyto = ((copyto+1) % 2)
     return matpat
 
+
 def combine(chroms,ibd):
     '''Given a list of diploid individuals, combine them into a single one.
+       For each of the maternal/paternal chromosomes,
+       move through all contributing chromosomes in parallel,
+       updating the current state for each, and combining them into the output state.
+
+       When at least two nonempty states are combined,
+       this is a coalescence;
+       record the collection of states and the position of the segment in the list 'ibd'.
     '''
     if len(chroms)==1:
         return chroms[0]
     matpat = [[],[]]
     for ii in xrange(2):
-        whereat = [ 0 for chrom in chroms ]  # current locations
+        whereat = [ 0 for chrom in chroms ]  # current locations on each chromosome
         nextones = [ ( chroms[j][ii][0] if len(chroms[j][ii])>0  else None ) for j in xrange(len(chroms)) ]
-        thisstate = [ set([]) for u in nextones ]
+        thisstate = [ set() for u in nextones ]
         while any( nextones ):
             nextpos = min( [ u[0] for u in nextones if u ] )
             for j in xrange(len(whereat)):
@@ -208,17 +217,138 @@ def combine(chroms,ibd):
                             nextones[j] = chroms[j][ii][whereat[j]] 
                         else:
                             nextones[j] = None
-            combstate = reduce( lambda u,v: u|v, thisstate )
-            if len( filter( lambda u: len(u)>0, thisstate ) ) > 1:
+            combining = [ x for x in thisstate if x ]
+            combstate = reduce( lambda u,v: u|v, combining, set() )
+            if len( combining ) > 1:
                 nextnextpos = min( [ u[0] for u in nextones if u ] )
-                ibd.append( (nextpos,nextnextpos,combstate) )
-            matpat[ii].append( (nextpos, combstate ) )
+                ibd.append( (nextpos,nextnextpos,combining) )
+            matpat[ii].append( (nextpos, combstate) )
     return matpat
 
 
+def parents(pop,t=0,ibdict=None,ancne=None,writeto=None):
+    '''Reallocate each chromosome to the ancestors,
+    and then recombine within each individual to resolve the mat/pat chromosomes.
+    Optionally, write out to writeto rather than recording in ibdict.
+      Note that combine() actually does the recording of events of interest in ibdict.
+    '''
+    if ancne is None:
+        ancne = effpopsize(pop,t)
+    newpop = {}.fromkeys( pop.keys() )
+    if (ibdict is None) or writeto:
+        ibdict = {}
+    ibdict.setdefault(t,{})
+    for x in pop:
+        newpop[x] = {}
+        ibd = ibdict[t].setdefault(x,[])
+        for ind in pop[x]:
+            # only redistribute nonempty chromosomes
+            nonempties = filter( lambda x: len(x)>0, pop[x][ind] )
+            parents = [ int( ancne[x]*random.random() ) for k in xrange(len(nonempties)) ]
+            # ensure parents are unique
+            while len(set(parents)) < len(nonempties):
+                parents = [ int( ancne[x]*random.random() ) for k in xrange(len(nonempties)) ]
+            for ii in range(len(nonempties)):
+                # each ancestral individual gets a list of chromosomes they passed on to an offspring
+                newpop[x].setdefault(parents[ii],[]).append( crossover( nonempties[ii] ) )
+        # now reassort those chromosomes into the parental chromosomes
+        for ind in newpop[x]:
+            # split out overlapping bits
+            newpop[x][ind] = combine( newpop[x][ind], ibd )
+    if writeto:
+        writecoal(ibdict,outfile=writeto,closeafter=False,writeheader=(t==0))
+    return newpop
+
+def writecoal(ibdict,filename="coalpedigree.coal.gz",outfile=None,closeafter=True,writeheader=True):
+    '''Write out all info in ibdict into a file.
+    The file is of the form:
+        time, unique identifying number, chromsome position start, end, population label of ancestral individual, and coalescing ids,
+    where ids is the string representation of the list of sets of coalescing ids
+    e.g. '[[2,3],[9],[1,10]]' means that 1,2,3,9,10 share this segment in a common ancestor for the first time,
+    but that 2 and 3 had "already" inherited the segment in a more recent ancestor, as did 1 and 10.
+    '''
+    if outfile is None:
+        outfile = fileopt(filename,"w")
+    blockid = 0
+    if writeheader:
+        header = ["t", "blockid", "start", "end", "location", "ids"]
+        outfile.write(" ".join(header)+"\n") 
+    for t in ibdict:
+        for x in ibdict[t]:
+            for start,end,ids in ibdict[t][x]:
+                outfile.write(" ".join(map(str,[t,blockid,start,end,x])+[str(map(list,ids)).translate(None," ")])+"\n")
+                blockid += 1
+    if closeafter:
+        outfile.close()
+    print blockid, "blocks written"
+
+def writeibd(pop,minlen=0.0,filename="coalpedigree.ibd.gz",outfile=None):
+    '''
+    Take the entire state of the process at the end of the run
+    and output all segments where pairs of individuals are ibd for at least minlen.
+    TO DO: add gaps in.
+    '''
+    pass
+    
+
+def oldwriteibd(ibdict,minlen=0.0,filename="coalpedigree.ibd.gz",writeinfo=True,outfile=None,closeafter=True,writeheader=True):
+    '''
+    DEFUNCT:
+
+    Output the ibd info in ibdict, in a manner compatible with BEAGLE's output.
+    Records all pairwise coalescences greater than minlen;
+    note that all n choose 2 combinations can get HUGE!
+    Optionally adds timing and location information, and a unique block id
+    that helps identification of multiple IBD (although better to use writecoal for this).
+
+    THIS IS NOT RIGHT, ESPECIALLY FOR minlen > 0.
+    '''
+    if outfile is None:
+        outfile = fileopt(filename,"w")
+    blockid = 0
+    if writeheader:
+        header = ["id1", "id2", "start", "end"]
+        if writeinfo:
+            header += ["blockid", "t", "location"]
+        outfile.write(" ".join(header)+"\n") 
+    for t in ibdict:
+        for x in ibdict[t]:
+            for start,end,ids in ibdict[t][x]:
+                if end-start>minlen:
+                    blockid += 1
+                    tmpids = ids.copy()
+                    ida = tmpids.pop()
+                    while( tmpids ):
+                        idb = tmpids.pop()
+                        output = [ida,idb,start,end]
+                        if writeinfo:
+                            output += [ blockid, t, x ]
+                        outfile.write(" ".join(map(str,output))+"\n")
+    if closeafter:
+        outfile.close()
+    print blockid, "blocks written"
+
+
+def fileopt(fname,opts):
+    '''Return the file referred to by fname, open with options opts;
+    if fname is "-" return stdin/stdout; if fname ends with .gz run it through gzip.
+    '''
+    if fname == "-":
+        if opts == "r":
+            fobj = sys.stdin
+        elif opts == "w":
+            fobj = sys.stdout
+        else:
+            print "Something not right here."
+    elif fname[len(fname)-3:len(fname)]==".gz":
+        fobj = gzip.open(fname,opts)
+    else:
+        fobj = open(fname,opts)
+    return fobj
+
 def rearrange(chroms,ibd):
     '''
-    OBSOLETE:
+    OBSOLETE: previous implementation.
     
     Take a list of overlapping segments and replace it by the list of nonoverlapping segments
     with labels equal to the concatenation of the labels in the original, e.g.
@@ -253,84 +383,3 @@ def rearrange(chroms,ibd):
         # if labels:
         #     print "rearrange error! left with some?", chroms, labels, breakpoints
         chroms[ii] = newchrom
-
-def parents(pop,t=0,ibdict=None,ancne=None,writeto=None):
-    '''Reallocate each chromosome to the ancestors,
-    and then recombine within each individual to resolve the mat/pat chromosomes.
-    Optionally, write out to writeto rather than recording in ibdict.
-    '''
-    if ancne is None:
-        ancne = effpopsize(pop,t)
-    newpop = {}.fromkeys( pop.keys() )
-    if (ibdict is None) or writeto:
-        ibdict = {}
-    ibdict.setdefault(t,{})
-    for x in pop:
-        newpop[x] = {}
-        ibd = ibdict[t].setdefault(x,[])
-        for ind in pop[x]:
-            # only redistribute nonempty chromosomes
-            nonempties = filter( lambda x: len(x)>0, pop[x][ind] )
-            parents = [ int( ancne[x]*random.random() ) for k in xrange(len(nonempties)) ]
-            # ensure parents are unique
-            while len(set(parents)) < len(nonempties):
-                parents = [ int( ancne[x]*random.random() ) for k in xrange(len(nonempties)) ]
-            for ii in range(len(nonempties)):
-                # each ancestral individual gets a list of chromosomes they passed on to an offspring
-                newpop[x].setdefault(parents[ii],[]).append( crossover( nonempties[ii] ) )
-        # now reassort those chromosomes into the parental chromosomes
-        for ind in newpop[x]:
-            # split out overlapping bits
-            newpop[x][ind] = combine( newpop[x][ind], ibd )
-    if writeto:
-        writeibd(ibdict,outfile=writeto,closeafter=False,writeheader=(t==0))
-    return newpop
-
-def writeibd(ibdict,filename="coalpedigree.ibd.gz",writeinfo=True,outfile=None,closeafter=True,writeheader=True):
-    '''Output the ibd info in ibdict, with or without timing and location information.
-    Records all overlaps greater than minlen, either pairwise or as a list.
-    Since all n choose 2 combinations can get HUGE, only records a sufficient list of these.
-    Identification of multiple IBD is helped along by the "blockid", unique to each block.
-    '''
-    if outfile is None:
-        outfile = fileopt(filename,"w")
-    blockid = 0
-    if writeheader:
-        header = ["id1", "id2", "start", "end"]
-        if writeinfo:
-            header += ["blockid", "t", "location"]
-        outfile.write(" ".join(header)+"\n") 
-    for t in ibdict:
-        for x in ibdict[t]:
-            if ibdict[t][x]:
-                for start,end,ids in ibdict[t][x]:
-                    blockid += 1
-                    tmpids = ids.copy()
-                    ida = tmpids.pop()
-                    while( tmpids ):
-                        idb = tmpids.pop()
-                        output = [ida,idb,start,end]
-                        if writeinfo:
-                            output += [ blockid, t, x ]
-                        outfile.write(" ".join(map(str,output))+"\n")
-    if closeafter:
-        outfile.close()
-    print blockid, "blocks written"
-
-
-def fileopt(fname,opts):
-    '''Return the file referred to by fname, open with options opts;
-    if fname is "-" return stdin/stdout; if fname ends with .gz run it through gzip.
-    '''
-    if fname == "-":
-        if opts == "r":
-            fobj = sys.stdin
-        elif opts == "w":
-            fobj = sys.stdout
-        else:
-            print "Something not right here."
-    elif fname[len(fname)-3:len(fname)]==".gz":
-        fobj = gzip.open(fname,opts)
-    else:
-        fobj = open(fname,opts)
-    return fobj
