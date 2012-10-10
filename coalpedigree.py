@@ -39,6 +39,7 @@ def initpop(sampsizes):
           sorted by position, with S_i the set of sample chromosomes inheriting from [pos_i,pos_i+1).
           The final position always has S_n = {}.
        Sampled diploid individual n has chromosomes numbers 2n and 2n+1.
+       Also return functions that identify which individuals and which population each chromosome is in.
     '''
     pop = {}.fromkeys( sampsizes.keys() )
     k = 0
@@ -48,9 +49,6 @@ def initpop(sampsizes):
             pop[x][ind] =  [ [(0.0,set([k])),(chrlen,set([]))], [(0.0,set([k+1])),(chrlen,set([]))] ]
             k += 2
     return pop
-
-def effpopsize(pop,t):
-    return {}.fromkeys(pop.keys(),300)
 
 def census(pop):
     '''Return number of individuals and number of breakpoints
@@ -160,23 +158,27 @@ def crossover(chrom):
     minloc = chrom[0][0]
     maxloc = chrom[-1][0]  # recall this is where state returns to [] finally
     # assign crossover locations -- begin with random subset of breaks between chromosomes
-    # crossovers will be a list of crossover locations in increasing order (begins with zero, or smallest location!)
+    # crossovers will be a list of crossover locations in increasing order
     crossovers = [ x for x in chrpos if (x > minloc) and (x < maxloc) and (random.random() < .5) ]
     z = minloc + random.expovariate(1)
     while z < maxloc :
         crossovers.append(z)
         z += random.expovariate(1)
     crossovers.sort()
-    crossovers.append( [maxloc + 1] )  # this has to be something larger than all breaks in the chromosomes
+    crossovers.append( maxloc + 1 )  # this has to be something larger than all breaks in the chromosomes
     # all done generating crossovers
     copyto = random.sample([0,1],1)[0]
     matpat = [[],[]]
-    laststate = set([])
+    laststate = set()
     j = 0  # where we are in the chromosome
     for k in xrange(len(crossovers)):
-        if len(laststate)>0:
-            # note that this won't happen for k==0
-            matpat[copyto].append( (crossovers[k-1],laststate) )
+        if laststate:
+            # record beginning state (ie state where we left off on other strand)
+            #  ... note that this won't happen for k==0
+            if crossovers[k-1] < chrom[j][0]:
+                matpat[copyto].append( (crossovers[k-1],laststate) )
+            else:
+                chrom[j][1].update( laststate )
         while (j < len(chrom)) and (chrom[j][0] < crossovers[k]):
             matpat[copyto].append( chrom[j] )
             laststate = chrom[j][1]
@@ -202,45 +204,46 @@ def combine(chroms,ibd):
     if len(chroms)==1:
         return chroms[0]
     matpat = [[],[]]
-    for ii in xrange(2):
+    for ii in range(2):
         whereat = [ 0 for chrom in chroms ]  # current locations on each chromosome
-        nextones = [ ( chroms[j][ii][0] if len(chroms[j][ii])>0  else None ) for j in xrange(len(chroms)) ]
+        nextones = [ ( chroms[k][ii][0] if len(chroms[k][ii])>0  else None ) for k in range(len(chroms)) ]
         thisstate = [ set() for u in nextones ]
         while any( nextones ):
             nextpos = min( [ u[0] for u in nextones if u ] )
-            for j in xrange(len(whereat)):
+            for j in range(len(whereat)):
                 if nextones[j]:
                     if (nextones[j][0] == nextpos):
                         thisstate[j] = nextones[j][1]
                         whereat[j] += 1
-                        if whereat[j] < len(chroms[j][ii]):
+                        try:
                             nextones[j] = chroms[j][ii][whereat[j]] 
-                        else:
+                        except IndexError:
+                            # i.e. we've got to the end of chroms[j][ii]
                             nextones[j] = None
             combining = [ x for x in thisstate if x ]
-            combstate = reduce( lambda u,v: u|v, combining, set() )
-            if len( combining ) > 1:
+            combstate = set().union(*combining)
+            if ibd and len( combining ) > 1:
                 nextnextpos = min( [ u[0] for u in nextones if u ] )
                 ibd.append( (nextpos,nextnextpos,combining) )
             matpat[ii].append( (nextpos, combstate) )
     return matpat
 
 
-def parents(pop,t=0,ibdict=None,ancne=None,writeto=None):
+def parents(pop,ancne,t=0,ibdict=None,writeto=None):
     '''Reallocate each chromosome to the ancestors,
     and then recombine within each individual to resolve the mat/pat chromosomes.
     Optionally, write out to writeto rather than recording in ibdict.
       Note that combine() actually does the recording of events of interest in ibdict.
     '''
-    if ancne is None:
-        ancne = effpopsize(pop,t)
     newpop = {}.fromkeys( pop.keys() )
-    if (ibdict is None) or writeto:
+    if (ibdict is None) and writeto:
         ibdict = {}
-    ibdict.setdefault(t,{})
+    if ibdict:
+        ibdict.setdefault(t,{})
     for x in pop:
         newpop[x] = {}
-        ibd = ibdict[t].setdefault(x,[])
+        if ibdict:
+            ibd = ibdict[t].setdefault(x,[])
         for ind in pop[x]:
             # only redistribute nonempty chromosomes
             nonempties = filter( lambda x: len(x)>0, pop[x][ind] )
@@ -254,7 +257,7 @@ def parents(pop,t=0,ibdict=None,ancne=None,writeto=None):
         # now reassort those chromosomes into the parental chromosomes
         for ind in newpop[x]:
             # split out overlapping bits
-            newpop[x][ind] = combine( newpop[x][ind], ibd )
+            newpop[x][ind] = combine( newpop[x][ind], ibd if ibdict else None )
     if writeto:
         writecoal(ibdict,outfile=writeto,closeafter=False,writeheader=(t==0))
     return newpop
@@ -282,14 +285,63 @@ def writecoal(ibdict,filename="coalpedigree.coal.gz",outfile=None,closeafter=Tru
         outfile.close()
     print blockid, "blocks written"
 
-def writeibd(pop,minlen=0.0,filename="coalpedigree.ibd.gz",outfile=None):
+
+def collectibd(pop):
     '''
-    Take the entire state of the process at the end of the run
-    and output all segments where pairs of individuals are ibd for at least minlen.
-    TO DO: add gaps in.
+    Take the entire state of the process at the end of the run,
+    which is organzed by ancestral chromosome,
+    and transform into the organization by sampled chromosome,
+    simply by collecting all breakpoints that have to do with each sampled chromosome together and sorting.
     '''
-    pass
-    
+    samples = {}
+    for x in pop:
+        for ind in pop[x]:
+            for chrom in pop[x][ind]:
+                for pos,inds in chrom:
+                    for ind in inds:
+                        samples.setdefault(ind,[]).append((pos,inds))
+    for ind in samples:
+        samples[ind].sort(key=lambda x: x[0])
+    return samples
+
+def writeibd(collected,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=True,outfile=None):
+    '''Write out pairwise IBD info from the output of collectibd,
+    restricting to segments at least minlen long OR at least as close as gaplen to another segment,
+    and optionally simplifying by pasting together adjacent blocks shared with the same individual.
+    Note that id1,id2 are in sorted order to avoid redundancy.
+    '''
+    if outfile is None:
+        outfile = fileopt(filename,"w")
+    header = ["id1", "id2", "start", "end"]
+    outfile.write(" ".join(header)+"\n") 
+    yesdoit = False
+    for ind in collected:
+        current = set([ind])
+        # keep track of the last starting position with each other individual
+        lastpoints = {}.fromkeys(collected.keys())
+        # and segements we haven't written 'cause they're too short
+        missedout = {}
+        for pos,others in collected[ind]:
+            for other in (current - others):
+                # ending points
+                if other > ind:
+                    for start,end in missedout.get(other,[]):
+                        if (pos - end < gaplen):
+                            outfile.write(" ".join(map(str,[ ind, other, start, end ])) + "\n")
+                            yesdoit = True
+                    if yesdoit or (pos - lastpoints[other] > minlen):
+                        outfile.write(" ".join(map(str,[ ind, other, lastpoints[other], pos ])) + "\n")
+                        missedout[other] = []
+                        yesdoit = False
+                    else:
+                        missedout.get(other,[]).append((lastpoints[other],pos))
+                    lastpoints[other] = pos
+            for other in (others - current):
+                # starting points
+                if other > ind:
+                    lastpoints[other] = pos
+            current = others
+
 
 def oldwriteibd(ibdict,minlen=0.0,filename="coalpedigree.ibd.gz",writeinfo=True,outfile=None,closeafter=True,writeheader=True):
     '''

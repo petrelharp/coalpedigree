@@ -8,6 +8,9 @@ description = '''Simulate IBD segments in a diploid population.
     Here pop is a dict whose keys give the names of the populations (the same as the keys of sampsizes)
        and if ancnefn or migprobs can also be dicts rather than functions (i.e. constant).
     Some of these can be passed in on the command line.
+
+    Example:
+          python sim-ibd-pedigree.py -i sim-demographics-2.py -t 10 -b test.ibd.gz -l test.log
     '''
 
 from optparse import OptionParser
@@ -18,8 +21,8 @@ import subprocess
 
 
 parser = OptionParser(description=description)
-parser.add_option("-o","--outfile",dest="outfile",help="name of output file (or '-' for stdout)",default="-")
-parser.add_option("-p","--popfile",dest="popfile",help="name of file to write final population state to (or '-' for stdout)",default="-")
+# parser.add_option("-c","--coalfile",dest="coalfile",help="name of file to write final coalescent info to (or '-' for stdout)",default="-")
+parser.add_option("-b","--ibdfile",dest="ibdfile",help="name of file to write final coalescent info to (or '-' for stdout)",default="-")
 parser.add_option("-l","--logfile",dest="logfile",help="name of log file (or '-' for stdout)",default="-")
 parser.add_option("-i","--infile",dest="infile",help="name of input file to get parameters from (or '-' for stdin)")
 parser.add_option("-t","--ngens",dest="ngens",help="total number of generations to simulate",default="10")
@@ -36,8 +39,8 @@ if options.infile is not None:
     exec(inparams)
 
 # command line options supercede statements in infile
-outfile = coal.fileopt(options.outfile, "w")
-popfile = coal.fileopt(options.popfile, "w")
+ibdfile = coal.fileopt(options.ibdfile, "w")
+# coalfile = coal.fileopt(options.coalfile, "w")
 logfile = coal.fileopt(options.logfile, "w")
 ngens = int(options.ngens)
 
@@ -78,11 +81,16 @@ if (not set(mignames) == set(ancnenames)) or (not set(subpopnames) == set(ancnen
 githash, giterr = subprocess.Popen(["git",'rev-parse','HEAD'], stdout=subprocess.PIPE).communicate()
 if giterr:
     githash = ""
-logfile.write("sim-ibd-pedigree.py -- " + githash + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n")
+logfile.write("sim-ibd-pedigree.py -- githash " + githash + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n")
 logfile.write("\n")
-logfile.write("output: " + str(options.outfile)+"\n")
-logfile.write("final population state: " + str(options.popfile)+"\n")
+logfile.write("options "+str(options)+"\n")
+logfile.write("\n")
+# logfile.write("coal output: " + str(options.coalfile)+"\n")
+logfile.write("ibd output: " + str(options.ibdfile)+"\n")
 logfile.write("input: " + str(options.infile)+"\n")
+logfile.write("--------------------------------\n")
+logfile.write(inparams)
+logfile.write("--------------------------------\n")
 logfile.write("ngens: " + str(ngens)+"\n")
 logfile.write("sampsizes: " + str(sampsizes)+"\n")
 logfile.write("Ne at 1: " + str(ancnefn(pop,t=1))+"\n")
@@ -96,14 +104,16 @@ for t in xrange(ngens):
     if t%10==0:
         logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
         logfile.flush()
-    pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t),writeto=outfile)
+    pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t))
     pop = coal.migrate(pop,migprobs=migprobs(pop,t))
 
-popfile.write( str(pop) )
+collected = coal.collectibd(pop)
+coal.writeibd(collected,minlen=0.01,gaplen=5.0,outfile=ibdfile)
+# writecoal(ibdict,outfile=coalfile)
 
 logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("\n")
 logfile.write("All done at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n" )
-outfile.close()
-popfile.close()
+ibdfile.close()
+# coalfile.close()
 logfile.close()

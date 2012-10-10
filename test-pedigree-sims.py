@@ -1,6 +1,7 @@
 import sys
 import time
 import math
+import pdb
 
 sys.path.append('/home/peter/projects/coalpedigree')
 import coalpedigree as coal
@@ -9,19 +10,27 @@ reload(coal)
 
 ## Do one population, constant size
 
-sampsizes = dict( a=30 )
+sampsizes = dict( a=2 )
+coal.chrlens = ( 2.0, 1.0 )
+coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
+coal.chrlen = sum(coal.chrlens)  # the last one (total length)
 
 start = time.time()
 
 pop = coal.initpop(sampsizes)
+poplist = []
+poplist.append(pop)
 ibdict = {}
 for t in xrange(40):
-    pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=dict(a=10000))
+    pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=dict(a=10))
+    poplist.append(pop)
     # coal.sanity(pop,print_details=True)
 
 print time.time()-start
 
-coal.writecoal(ibdict,filename="test.fibd.gz")
+coal.writecoal(ibdict,filename="test.coal.gz")
+collected = coal.collectibd(pop)
+coal.writeibd(collected,minlen=0.2,gaplen=.2,filename="test.fibd.gz")
 
 
 ## Do migration and expanding populations
