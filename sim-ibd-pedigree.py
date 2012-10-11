@@ -18,6 +18,7 @@ import coalpedigree as coal
 import re
 import time
 import subprocess
+import pdb
 
 
 parser = OptionParser(description=description)
@@ -110,6 +111,7 @@ for t in xrange(ngens):
 collected = coal.collectibd(pop)
 coal.writeibd(collected,minlen=0.01,gaplen=5.0,outfile=ibdfile)
 # writecoal(ibdict,outfile=coalfile)
+pdb.set_trace()
 
 logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("\n")

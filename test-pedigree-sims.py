@@ -2,6 +2,8 @@ import sys
 import time
 import math
 import pdb
+# import gc
+# import objgraph, inspect
 
 sys.path.append('/home/peter/projects/coalpedigree')
 import coalpedigree as coal
@@ -18,12 +20,12 @@ coal.chrlen = sum(coal.chrlens)  # the last one (total length)
 start = time.time()
 
 pop = coal.initpop(sampsizes)
-poplist = []
-poplist.append(pop)
+# poplist = []
+# poplist.append(pop)
 ibdict = {}
-for t in xrange(40):
+for t in xrange(20):
     pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=dict(a=10))
-    poplist.append(pop)
+    # poplist.append(pop)
     # coal.sanity(pop,print_details=True)
 
 print time.time()-start
@@ -31,7 +33,7 @@ print time.time()-start
 coal.writecoal(ibdict,filename="test.coal.gz")
 collected = coal.collectibd(pop)
 coal.writeibd(collected,minlen=0.2,gaplen=.2,filename="test.fibd.gz")
-
+# objgraph.show_chain(objgraph.find_backref_chain(random.choice(objgraph.by_type('set')),inspect.ismodule),filename='chain.png')
 
 ## Do migration and expanding populations
 ## Three populations:
@@ -62,15 +64,39 @@ def migprobs(pop,t):
 
 start = time.time()
 
-for chrnum in range(1,23):
-    pop = coal.initpop(sampsizes)
-    ibdict = {}
-    for t in xrange(300):
-        pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=ancnefn(pop,t))
-        pop = coal.migrate(pop,migprobs=migprobs(pop,t))
-    coal.writeibd(ibdict,filename="-".join(["growing"]+map(str,[splittime,growthtime,splitsize,nesize])+["chr"+str(chrnum),"fibd.gz"]),writeinfo=True)
+objgraph.show_growth(limit=3) 
+objgraph.show_most_common_types()
+
+pop = coal.initpop(sampsizes)
+for t in xrange(5):
+    pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t))
+    pop = coal.migrate(pop,migprobs=migprobs(pop,t))
+    print t
 
 print time.time()-start
+
+objgraph.show_most_common_types()
+
+nzeros = [ sum( map( lambda x: sum( map( lambda y: sum( [ ( 1 if len(z[1])==0 else 0 ) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of zero-sets
+nsets = [ sum( map( lambda x: sum( map( lambda y: sum( [ len(z[1]) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of set elements
+nbreaks = [ sum( map( lambda x: len(x[0])+len(x[1]), d.values() ) ) for d in pop.values() ]  # number of breakpoints
+ninds = map( len, pop.values() )
+[ (1.0*c/d,1.0*a/b,1.0*c/(b-a)) for a,b,c,d in zip( nzeros, nbreaks, nsets, ninds ) ]  # mean number of sets, mean proportion of sets that are empty and mean size of nonzero sets
+# this is how many numbers?
+sum(nbreaks) , sum(nsets)
+newpop = {}.fromkeys(range(3))
+ninds = [40896, 15736, 29079]
+for x in range(3):
+    newpop[x] = {}.fromkeys(range(ninds[x]))
+    for y in newpop[x]:
+        newpop[x][y] = [ [ ( 0.0, set(range(1)) ) for j in range(20) ], [ ( 0.0, set() ) for j in range(20) ] ]
+    
+
+del pop
+gc.collect()
+objgraph.show_most_common_types()
+objgraph.show_growth()
+showthis = random.choice(objgraph.by_type('set')); showthis; objgraph.show_chain(objgraph.find_backref_chain(showthis,inspect.ismodule),filename='chain.png')
 
 
 

@@ -46,7 +46,7 @@ def initpop(sampsizes):
     for x in pop:
         pop[x] = {}.fromkeys( [ ii for ii in xrange(sampsizes[x]) ] )
         for ind in pop[x]:
-            pop[x][ind] =  [ [(0.0,set([k])),(chrlen,set([]))], [(0.0,set([k+1])),(chrlen,set([]))] ]
+            pop[x][ind] =  [ [(0.0,set([k])),(chrlen,set())], [(0.0,set([k+1])),(chrlen,set())] ]
             k += 2
     return pop
 
@@ -94,7 +94,7 @@ def sanity(pop,print_details=False):
                         print "Oops!  Are we not diploid?"
                         print x, ind, pop[x][ind]
                 # all chromosomes of the proper form?
-                if any( [any(map(lambda w: len(w)!= 2 or type(w[0])!=type(0.0) or type(w[1])!=type(set([])), z)) for z in pop[x][ind]] ):
+                if any( [any(map(lambda w: len(w)!= 2 or type(w[0])!=type(0.0) or type(w[1])!=type(set()), z)) for z in pop[x][ind]] ):
                     errors.append( (x,ind) )
                     if print_details:
                         print "Oops: malformed individual!"
@@ -185,7 +185,7 @@ def crossover(chrom):
             j += 1
         if j < len(chrom):
             if len(laststate)>0:
-                matpat[copyto].append( (crossovers[k],set([])) )
+                matpat[copyto].append( (crossovers[k],set()) )
             # switch to other chromosome
             copyto = ((copyto+1) % 2)
     return matpat
