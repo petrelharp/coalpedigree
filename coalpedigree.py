@@ -312,6 +312,9 @@ def writeibd(collected,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simp
     '''
     if outfile is None:
         outfile = fileopt(filename,"w")
+        newfile = True
+    else:
+        newfile = False
     header = ["id1", "id2", "start", "end"]
     outfile.write(" ".join(header)+"\n") 
     yesdoit = False
@@ -341,6 +344,8 @@ def writeibd(collected,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simp
                 if other > ind:
                     lastpoints[other] = pos
             current = others
+    if newfile:
+        outfile.close()
 
 
 def oldwriteibd(ibdict,minlen=0.0,filename="coalpedigree.ibd.gz",writeinfo=True,outfile=None,closeafter=True,writeheader=True):

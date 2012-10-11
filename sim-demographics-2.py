@@ -10,7 +10,7 @@
 '''
 import math
 
-sampsizes = dict( zip(['a','b','c'],[1500,1000,500]) )
+sampsizes = dict( zip(['a','b','c'],[150,100,50]) )
 
 # smaller Ne and smaller chromosomes
 splittime = 50
@@ -18,7 +18,7 @@ growthtime = 30
 splitsize = 1000
 nesize = 30000
 
-coal.chrlens = ( 2.0, 1.0 )
+coal.chrlens = ( 2.0, 2.0, 1.0, 1.0 )
 coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 coal.chrlen = sum(coal.chrlens)  # the last one (total length)
 

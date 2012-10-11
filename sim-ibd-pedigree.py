@@ -105,9 +105,15 @@ for t in xrange(ngens):
     if t%10==0:
         logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
         logfile.flush()
+    if t%20==0:
+        collected = coal.collectibd(pop)
+        ibdfile.write("t = " + str(t) + " -----------\n")
+        coal.writeibd(collected,minlen=0.01,gaplen=5.0,outfile=ibdfile)
+        ibdfile.flush()
     pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t))
     pop = coal.migrate(pop,migprobs=migprobs(pop,t))
 
+ibdfile.write("t = " + str(t) + " -----------\n")
 collected = coal.collectibd(pop)
 coal.writeibd(collected,minlen=0.01,gaplen=5.0,outfile=ibdfile)
 # writecoal(ibdict,outfile=coalfile)
