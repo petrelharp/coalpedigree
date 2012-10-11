@@ -27,7 +27,7 @@ import bisect
 
 # chrlen = 1.0 # chromosome length
 # Default: human chromosome lengths (almost all of them)
-chrlens = ( 2.6200830, 2.4403647, 2.0997332, 1.9748005, 1.8958412, 1.7470526, 1.7235610, 1.5652810, 1.4628861, 1.6040336, 1.4388007, 1.5640816, 1.1934065, 1.0483476, 1.1093523, 1.1868929, 1.1961966, 1.0574726, 0.9257134, 0.8362057, 0.5479314, 0.5559191 )  # chromosome lengths (in Morgans)
+chrlens = ( 2.6200830, 2.4403647, 2.0997332, 1.9748005, 1.8958412, 1.7470526, 1.7235610, 1.5652810, 1.4628861, 1.6040336, 1.4388007, 1.5640816, 1.1934065, 1.0483476, 1.1093523, 1.1868929, 1.1961966, 1.0574726, 0.9257134, 0.8362057, 0.5479314, 0.5559191 )  # default chromosome lengths (in Morgans)
 chrpos = tuple( [ sum( chrlens[0:k] ) for k in range(1,len(chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 chrlen = sum(chrlens)  # the last one (total length)
 
@@ -348,44 +348,6 @@ def writeibd(collected,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simp
         outfile.close()
 
 
-def oldwriteibd(ibdict,minlen=0.0,filename="coalpedigree.ibd.gz",writeinfo=True,outfile=None,closeafter=True,writeheader=True):
-    '''
-    DEFUNCT:
-
-    Output the ibd info in ibdict, in a manner compatible with BEAGLE's output.
-    Records all pairwise coalescences greater than minlen;
-    note that all n choose 2 combinations can get HUGE!
-    Optionally adds timing and location information, and a unique block id
-    that helps identification of multiple IBD (although better to use writecoal for this).
-
-    THIS IS NOT RIGHT, ESPECIALLY FOR minlen > 0.
-    '''
-    if outfile is None:
-        outfile = fileopt(filename,"w")
-    blockid = 0
-    if writeheader:
-        header = ["id1", "id2", "start", "end"]
-        if writeinfo:
-            header += ["blockid", "t", "location"]
-        outfile.write(" ".join(header)+"\n") 
-    for t in ibdict:
-        for x in ibdict[t]:
-            for start,end,ids in ibdict[t][x]:
-                if end-start>minlen:
-                    blockid += 1
-                    tmpids = ids.copy()
-                    ida = tmpids.pop()
-                    while( tmpids ):
-                        idb = tmpids.pop()
-                        output = [ida,idb,start,end]
-                        if writeinfo:
-                            output += [ blockid, t, x ]
-                        outfile.write(" ".join(map(str,output))+"\n")
-    if closeafter:
-        outfile.close()
-    print blockid, "blocks written"
-
-
 def fileopt(fname,opts):
     '''Return the file referred to by fname, open with options opts;
     if fname is "-" return stdin/stdout; if fname ends with .gz run it through gzip.
@@ -402,41 +364,3 @@ def fileopt(fname,opts):
     else:
         fobj = open(fname,opts)
     return fobj
-
-def rearrange(chroms,ibd):
-    '''
-    OBSOLETE: previous implementation.
-    
-    Take a list of overlapping segments and replace it by the list of nonoverlapping segments
-    with labels equal to the concatenation of the labels in the original, e.g.
-      (a,a+2,[1,2]) , (a+1,a+3,[1,3]) -> (a,a+1,[1,2]) , (a+1,a+2,[1,1,2,3]) , (a+2,a+3,[1,3])
-
-    Also, record such newly overlapping (IBD) segments here.
-    '''
-    for ii in range(len(chroms)):
-        if len(chroms[ii])<=1:
-            continue
-        breakpoints = [ (a,+1,k) for (a,b,k) in chroms[ii] ] + [ (b,-1,k) for (a,b,k) in chroms[ii] ]
-        breakpoints.sort()
-        newchrom = []
-        start = breakpoints[0][0]
-        # this is greater than 1 iff we're in a new segment.  it should never be negative.
-        cumsum = breakpoints[0][1]  
-        labels = breakpoints[0][2].copy() 
-        for x,bit,k in breakpoints[1:len(breakpoints)]:
-            # process all changes at the same location first
-            if not x==start:
-                if labels:
-                    newchrom.append( (start,x,labels.copy()) )
-                    if cumsum>1:
-                        ibd.append( (start,x,labels.copy()) )
-                start = x
-            if bit == +1:
-                labels.update( k )
-            else:
-                labels.difference_update( k )
-            cumsum += bit
-        # # sanity check
-        # if labels:
-        #     print "rearrange error! left with some?", chroms, labels, breakpoints
-        chroms[ii] = newchrom
