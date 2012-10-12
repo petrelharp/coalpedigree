@@ -13,6 +13,7 @@ reload(coal)
 ## Do one population, constant size
 
 sampsizes = dict( a=2 )
+migprobs = dict( [ (('a','a'),0.0) ] )
 coal.chrlens = ( 2.0, 1.0 )
 coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 coal.chrlen = sum(coal.chrlens)  # the last one (total length)
@@ -24,15 +25,15 @@ pop = coal.initpop(sampsizes)
 # poplist.append(pop)
 ibdict = {}
 for t in xrange(20):
-    pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=dict(a=10))
+    coal.parents(pop,t=t,ibdict=ibdict,migprobs=migprobs,ancne=dict(a=10))
     # poplist.append(pop)
-    # coal.sanity(pop,print_details=True)
+    coal.sanity(pop,print_details=True)
 
 print time.time()-start
 
+coal.writeibd(pop,minlen=0.2,gaplen=0.1,filename="test.fibd.gz")
+
 coal.writecoal(ibdict,filename="test.coal.gz")
-collected = coal.collectibd(pop)
-coal.writeibd(collected,minlen=0.2,gaplen=.2,filename="test.fibd.gz")
 # objgraph.show_chain(objgraph.find_backref_chain(random.choice(objgraph.by_type('set')),inspect.ismodule),filename='chain.png')
 
 ## Do migration and expanding populations
@@ -64,19 +65,18 @@ def migprobs(pop,t):
 
 start = time.time()
 
-objgraph.show_growth(limit=3) 
-objgraph.show_most_common_types()
+# objgraph.show_growth(limit=3) 
+# objgraph.show_most_common_types()
 
 pop = coal.initpop(sampsizes)
-for t in xrange(5):
-    pop = coal.parents(pop,t=t,ancne=ancnefn(pop,t))
-    pop = coal.migrate(pop,migprobs=migprobs(pop,t))
+for t in xrange(150):
+    coal.parents(pop,t=t,migprobs=migprobs(pop,t),ancne=ancnefn(pop,t))
     print t
 
 print time.time()-start
 
-objgraph.show_most_common_types()
-
+# objgraph.show_most_common_types()
+ 
 nzeros = [ sum( map( lambda x: sum( map( lambda y: sum( [ ( 1 if len(z[1])==0 else 0 ) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of zero-sets
 nsets = [ sum( map( lambda x: sum( map( lambda y: sum( [ len(z[1]) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of set elements
 nbreaks = [ sum( map( lambda x: len(x[0])+len(x[1]), d.values() ) ) for d in pop.values() ]  # number of breakpoints
