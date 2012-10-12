@@ -18,10 +18,6 @@ growthtime = 30
 splitsize = 1000
 nesize = 30000
 
-coal.chrlens = ( 2.0, 2.0, 1.0, 1.0 )
-coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
-coal.chrlen = sum(coal.chrlens)  # the last one (total length)
-
 def ancnefn(pop,t):
     ancne = dict( a=nesize, b=nesize )
     if t>splittime:
