@@ -27,8 +27,8 @@ parser.add_option("-b","--ibdfile",dest="ibdfile",help="name of file to write fi
 parser.add_option("-l","--logfile",dest="logfile",help="name of log file (or '-' for stdout)",default="-")
 parser.add_option("-i","--infile",dest="infile",help="name of input file to get parameters from (or '-' for stdin)")
 parser.add_option("-t","--ngens",dest="ngens",help="total number of generations to simulate",default="10")
-parser.add_option("-n","--nesize",dest="nesize",help="default effective population size",default="10000")
-parser.add_option("-m","--migprob",dest="migprob",help="default migration probability",default=".001")
+parser.add_option("-n","--nesize",dest="nesize",help="effective population size")
+parser.add_option("-m","--migprob",dest="migprob",help="migration probability")
 parser.add_option("-s","--samplesizes",dest="sampsizes",help="sample sizes")
 (options,args) =  parser.parse_args()
 
@@ -45,17 +45,25 @@ ibdfile = coal.fileopt(options.ibdfile, "w")
 logfile = coal.fileopt(options.logfile, "w")
 ngens = int(options.ngens)
 
-try:
-    if type(ancnefn) == type({}):
-        ancnefn = lambda pop,t: ancnefn
-except NameError:
+if options.nesize is not None:
     ancnefn = lambda pop,t: {}.fromkeys(pop.keys(),int(options.nesize))
+else:
+    try:
+        if type(ancnefn) == type({}):
+            ancnefn = lambda pop,t: ancnefn
+    except NameError:
+        print("Effective pop sizes (ancne) needs to be specified on the command line (-n) or in the input file (-i).")
+        raise
 
-try:
-    if type(migprobs) == type({}):
-        migprobs = lambda pop,t: migprobs
-except NameError:
+if options.migprob is not None:
     migprobs = lambda pop,t: {}.fromkeys([(x,y) for x in pop.keys() for y in pop.keys()],float(options.migprob))
+else:
+    try:
+        if type(migprobs) == type({}):
+            migprobs = lambda pop,t: migprobs
+    except NameError:
+        print("Migration rates (migprobs) need to be specified on the command line (-m) or in the input file (-i).")
+        raise
 
 
 if options.sampsizes is not None:
