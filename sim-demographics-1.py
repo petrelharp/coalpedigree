@@ -6,7 +6,7 @@
 
 '''
 
-sampsizes = dict( a=200 )
+sampsizes = dict( a=2000 )
 
 # smaller Ne and smaller chromosomes
 nesize = 10000

@@ -10,7 +10,7 @@
 '''
 import math
 
-sampsizes = dict( zip(['a','b','c'],[150,100,50]) )
+sampsizes = dict( zip(['a','b','c'],[1000,500,500]) )
 
 # smaller Ne and smaller chromosomes
 splittime = 50
