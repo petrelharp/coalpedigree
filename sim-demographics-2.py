@@ -5,7 +5,7 @@
           a and b are similar sized, constant
 
    Run with e.g.
-    BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-2.fibd.gz -l ${BFIX}-growing-migration-2.log -t 150 -i ~/projects/coalpedigree/sim-demographics-2.py &
+    ( BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-2.fibd.gz -l ${BFIX}-growing-migration-2.log -t 150 -i ~/projects/coalpedigree/sim-demographics-2.py )&
 
 '''
 import math
@@ -15,8 +15,8 @@ sampsizes = dict( zip(['a','b','c'],[1000,500,500]) )
 # smaller Ne and smaller chromosomes
 splittime = 50
 growthtime = 30
-splitsize = 1000
-nesize = 30000
+splitsize = 10000
+nesize = 3000000
 
 def ancnefn(pop,t):
     ancne = dict( a=nesize, b=nesize )

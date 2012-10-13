@@ -115,13 +115,18 @@ for t in xrange(ngens):
         logfile.flush()
     coal.parents(pop,ancne=ancnefn(pop,t),migprobs=migprobs(pop,t),t=t)
 
+logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
+logfile.write("Done with simulation at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "; now writing out IBD info.\n" )
+
 coal.writeibd(pop,minlen=0.01,gaplen=5.0,outfile=ibdfile)
 # writecoal(ibdict,outfile=coalfile)
 # pdb.set_trace()
 
-logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("\n")
-logfile.write("All done at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n" )
+logfile.write("Closing ibd file...\n")
+
 ibdfile.close()
+
+logfile.write("All done at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n" )
 # coalfile.close()
 logfile.close()
