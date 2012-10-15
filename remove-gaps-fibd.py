@@ -1,5 +1,5 @@
 #!/usr/bin/python
-description='''Also, merge any adjacent blocks that are separated by no more than the distance gap_threshold.
+description='''Merge any adjacent blocks that are separated by no more than the distance gap_threshold.
 Usage: python remove-gaps-fibd.py gap_threshold file.fibd.gz (pipe output to selected file)
 Output is one line per tract per pair of individuals, with positionsl of strt and end of tract.
 '''

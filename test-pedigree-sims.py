@@ -31,9 +31,11 @@ for t in xrange(20):
 
 print time.time()-start
 
+coal.writeibd(pop,minlen=0.0,gaplen=0.0,filename="test.fibd.gz")
+
 coal.writeibd(pop,minlen=0.2,gaplen=0.1,filename="test.fibd.gz")
 
-coal.writecoal(ibdict,filename="test.coal.gz")
+# coal.writecoal(ibdict,filename="test.coal.gz")
 # objgraph.show_chain(objgraph.find_backref_chain(random.choice(objgraph.by_type('set')),inspect.ismodule),filename='chain.png')
 
 ## Do migration and expanding populations

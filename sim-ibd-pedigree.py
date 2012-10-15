@@ -23,13 +23,15 @@ import subprocess
 
 parser = OptionParser(description=description)
 # parser.add_option("-c","--coalfile",dest="coalfile",help="name of file to write final coalescent info to (or '-' for stdout)",default="-")
-parser.add_option("-b","--ibdfile",dest="ibdfile",help="name of file to write final coalescent info to (or '-' for stdout)",default="-")
+parser.add_option("-b","--ibdfile",dest="ibdfile",help="name of file to write final ibd blocks to (or '-' for stdout)",default="-")
 parser.add_option("-l","--logfile",dest="logfile",help="name of log file (or '-' for stdout)",default="-")
 parser.add_option("-i","--infile",dest="infile",help="name of input file to get parameters from (or '-' for stdin)")
 parser.add_option("-t","--ngens",dest="ngens",help="total number of generations to simulate",default="10")
 parser.add_option("-n","--nesize",dest="nesize",help="effective population size")
 parser.add_option("-m","--migprob",dest="migprob",help="migration probability")
 parser.add_option("-s","--samplesizes",dest="sampsizes",help="sample sizes")
+parser.add_option("-e","--minlen",dest="minlen",help="minimum length of IBD block to record (default value 0.5cM)",default=None)
+parser.add_option("-g","--gaplen",dest="gaplen",help="gap length: blocks closer together than this will be recorded even if shorter than minlen (default value 50cM)",default=None)
 (options,args) =  parser.parse_args()
 
 
@@ -76,6 +78,25 @@ else:
     except NameError:
         raise TypeError("Sampsizes must be set in infile or on command line.")
 
+if options.minlen is not None:
+    minlen = float( options.minlen )
+try:
+    if not type(minlen) == type(0.0):
+        raise TypeError("minlen is not defined: " + str(minlen))
+except NameError:
+    # default value
+    minlen = 0.005
+
+if options.gaplen is not None:
+    gaplen = float( options.gaplen )
+try:
+    if not type(gaplen) == type(0.0):
+        raise TypeError("gaplen is not defined: " + str(gaplen))
+except NameError:
+    # default value
+    gaplen = 0.5
+
+
 # initialize
 pop = coal.initpop(sampsizes)
 
@@ -118,7 +139,7 @@ for t in xrange(ngens):
 logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("Done with simulation at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "; now writing out IBD info.\n" )
 
-coal.writeibd(pop,minlen=0.01,gaplen=5.0,outfile=ibdfile)
+coal.writeibd(pop,minlen=minlen,gaplen=gaplen,outfile=ibdfile)
 # writecoal(ibdict,outfile=coalfile)
 # pdb.set_trace()
 
