@@ -64,12 +64,10 @@ for line in infile:
              # gaplen is max( start1-end2, start2-end1 ) since the min is negative
              gap = gap and ( max( x[0]-end, start-x[1] ) < max( end-start, x[1]-x[0] ) )
              if ovlap or gap:
-                 # on the same chromosome?
-                 if any( [ ( min([x[0],start])>a and max([x[0],start])<b ) for a,b in chrstartends ] ):
-                     # overlap
-                     markremove[j] = True
-                     start = min(x[0],start)
-                     end = max(x[1],end)
+                 # overlap
+                 markremove[j] = True
+                 start = min(x[0],start)
+                 end = max(x[1],end)
         if sum(markremove):
              results[(id1,id2)] = [x for x,r in zip(currentlist,markremove) if not r]
         results[(id1,id2)].append([start,end])
@@ -80,5 +78,11 @@ for line in infile:
 outfile.write("id1 id2 start end\n")
 for x in results:
     # id1 = x[0]; id2 = x[1]
+    # on the same chromosome?
     for y in results[x]:
-        outfile.write( " ".join(map(str,x) + map(str,y)) + "\n" )
+        # start,end = y
+        breakpoints = [ y[0] ] + [ z for z in chrends if y[0] < z and z < y[1] ] + [ y[1] ]
+        for k in xrange(len(breakpoints)-1):
+            outfile.write( " ".join(map(str,x) + map(str,y[k:(k+2)])) + "\n" )
+
+outfile.close()

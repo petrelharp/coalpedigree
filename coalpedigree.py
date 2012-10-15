@@ -237,7 +237,8 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
     for ii in shared:
         shared[ii] = {}
         shortones[ii] = defaultdict(lambda : [])
-    thestack = []
+    thestack = [] # next positions for each, sorted
+    pending = {}  # next events occurring at the same junction position
     for j in xrange(len(chromlist)):
         heapq.heappush( thestack, (chromlist[j].next(),j) )
     # initialize current ancestral individual states of each chromosome
@@ -248,46 +249,57 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
     # sanity
     if filter( lambda x: x is None, curstate ):
         raise ValueError("writeibd: Wrong number of 0.0s found?!?")
-    # reinit
+    # refill thestack
     for j in xrange(len(chromlist)):
         try:
             heapq.heappush( thestack, (chromlist[j].next(),j) )
         except StopIteration:
-            # oops, nothing more in chromlist[j]
+            # ah, nothing more in chromlist[j]
             pass
     # initialize sharing segments
     for i,j in it.ifilter( lambda x: curstate[x[0]]==curstate[x[1]], it.product(xrange(len(curstate)),xrange(len(curstate))) ):
         if i != j:
             shared[i][j] = shared[j][i] = 0.0
-    while thestack:
-        # if anc has changed, must end segments j participates in at pos and begin new ones,
+    pos = 0.0 # where we're at now
+    while pending or thestack:
+        # load all events occurring at the same junction position into pending;
+        #   then process each, not dealing with relationships to others still pending.
+        # for each, if anc has changed, must end segments j participates in at pos and begin new ones,
         #   updating curstate and shared
-        (pos,anc),curi = heapq.heappop(thestack)
-        if curstate[ curi ] != anc:
-            for j,start in shared[curi].items():
-                if shortones[curi][j]:
-                    dogaps = [ shend > start-gaplen for shstart,shend in shortones[curi][j] ]
-                    for shstart,shend in it.compress(shortones[curi][j],dogaps):
-                        outfile.write( " ".join(map(str,[curi,j,shstart,shend])) + "\n" )
-                    del shortones[j][curi]
-                    del shortones[curi][j]
-                else:
-                    dogaps = [False]
-                if any(dogaps) or pos-start > minlen:
-                    outfile.write( " ".join(map(str,[curi,j,start,pos])) + "\n" )
-                else:
-                    shortones[curi][j].append( (start,pos) )
-                    if not curi in shortones[j]:
-                        shortones[j][curi] = shortones[curi][j]
-                del shared[curi][j]
-                del shared[j][curi]
-            for k in [ k for k,x in it.izip(xrange(len(curstate)),curstate) if x==anc ]:
-                shared[curi][k] = shared[k][curi] = pos
-            curstate[curi] = anc
-        try:
-            heapq.heappush( thestack, ( chromlist[curi].next(), curi ) )
-        except StopIteration:
-            pass
+        if (not pending) or (thestack and (thestack[0][0][0] == pos)):
+            (pos,anc),curi = heapq.heappop(thestack)
+            pending[curi] = anc
+            try:
+                heapq.heappush( thestack, ( chromlist[curi].next(), curi ) )
+            except StopIteration:
+                pass
+        else:
+            while pending:
+                curi,anc = pending.popitem()
+                if curstate[ curi ] != anc:
+                    for j,start in shared[curi].items():
+                        if j not in pending and curstate[j]!=anc:
+                            # finish off blocks
+                            if j in shortones[curi]:
+                                dogaps = [ shend > start-gaplen for shstart,shend in shortones[curi][j] ]
+                                for shstart,shend in it.compress(shortones[curi][j],dogaps):
+                                    outfile.write( " ".join(map(str,[curi,j,shstart,shend])) + "\n" )
+                                del shortones[j][curi]
+                                del shortones[curi][j]
+                            else:
+                                dogaps = [False]
+                            if any(dogaps) or pos-start > minlen:
+                                outfile.write( " ".join(map(str,[curi,j,start,pos])) + "\n" )
+                            else:
+                                shortones[curi][j].append( (start,pos) )
+                                if not curi in shortones[j]:
+                                    shortones[j][curi] = shortones[curi][j]
+                            del shared[curi][j]
+                            del shared[j][curi]
+                    for k in [ k for k in xrange(len(curstate)) if (k not in pending) and (curstate[k]==anc) ]:
+                        # begin new ones
+                        shared[curi][k] = shared[k][curi] = pos
+                    curstate[curi] = anc
     # finish off dangling blocks
     for i in shared.keys():
         for j,start in shared[i].items():
