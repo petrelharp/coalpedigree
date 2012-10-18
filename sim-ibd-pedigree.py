@@ -30,8 +30,8 @@ parser.add_option("-t","--ngens",dest="ngens",help="total number of generations 
 parser.add_option("-n","--nesize",dest="nesize",help="effective population size")
 parser.add_option("-m","--migprob",dest="migprob",help="migration probability")
 parser.add_option("-s","--samplesizes",dest="sampsizes",help="sample sizes")
-parser.add_option("-e","--minlen",dest="minlen",help="minimum length of IBD block to record (default value 0.5cM)",default=None)
-parser.add_option("-g","--gaplen",dest="gaplen",help="gap length: blocks closer together than this will be recorded even if shorter than minlen (default value 50cM)",default=None)
+parser.add_option("-e","--minlen",dest="minlen",help="minimum length of IBD block to record IN MORGANS (default value 0.005M = 0.5cM)",default=None)
+parser.add_option("-g","--gaplen",dest="gaplen",help="gap length, IN MORGANS: blocks closer together than this will be recorded even if shorter than minlen (default value 0.5M = 50cM)",default=None)
 (options,args) =  parser.parse_args()
 
 
