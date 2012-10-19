@@ -1,7 +1,8 @@
 #!/usr/bin/python
 description='''Merge any adjacent blocks that are separated by no more than the distance gap_threshold.
-Usage: python remove-gaps-fibd.py gap_threshold file.fibd.gz (pipe output to selected file)
-Output is one line per tract per pair of individuals, with positionsl of strt and end of tract.
+Output is one line per tract per pair of individuals, with positions of start and end of tract.
+
+Warning: this reads the entire file into memory at once.
 '''
 # highly modified by plr from process-ibd.py by Browning
 
@@ -14,7 +15,7 @@ from optparse import OptionParser
 parser = OptionParser(description=description)
 parser.add_option("-b","--ibdfile",dest="ibdfile",help="name of file to read ibd from (or '-' for stdin)",default="-")
 parser.add_option("-o","--outfile",dest="outfile",help="name of file to output merged ibd from (or '-' for stdout)",default="-")
-parser.add_option("-g","--gaplen",dest="gaplen",help="merge blocks separated by a block no longer than this long", default=0.0)
+parser.add_option("-g","--gaplen",dest="gaplen",help="merge blocks separated by a block no longer than this long (in MORGANS)", default=0.0)
 parser.add_option("-c","--chromfile",dest="chromfile",help="file to parse chromosome lengths from (e.g. logfile for that run)", default=None)
 (options,args) =  parser.parse_args()
 
