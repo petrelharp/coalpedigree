@@ -84,6 +84,6 @@ for x in results:
         # start,end = y
         breakpoints = [ y[0] ] + [ z for z in chrends if y[0] < z and z < y[1] ] + [ y[1] ]
         for k in xrange(len(breakpoints)-1):
-            outfile.write( " ".join(map(str,x) + map(str,y[k:(k+2)])) + "\n" )
+            outfile.write( " ".join(map(str,x) + map(str,breakpoints[k:(k+2)])) + "\n" )
 
 outfile.close()
