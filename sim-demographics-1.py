@@ -2,13 +2,12 @@
 '''One population, constant size 10,000.
 
    Run with e.g.
-    BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-1.fibd.gz -l ${BFIX}-growing-migration-1.log -t 150 -i ~/projects/coalpedigree/sim-demographics-1.py &
+    BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-1.fibd.gz -l ${BFIX}-growing-migration-1.log -t 250 -i ~/projects/coalpedigree/sim-demographics-1.py -e .001 &
 
 '''
 
-sampsizes = dict( a=2000 )
+sampsizes = dict( a=1000 )
 
-# smaller Ne and smaller chromosomes
 nesize = 10000
 
 def ancnefn(pop,t):
@@ -16,5 +15,5 @@ def ancnefn(pop,t):
     return ancne
 
 def migprobs(pop,t):
-    migprobs = {}.fromkeys([('a','a')],0.0)
+    migprobs = {}.fromkeys([('a','a')],1.0)
     return migprobs
