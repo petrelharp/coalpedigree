@@ -17,7 +17,8 @@ from optparse import OptionParser
 import coalpedigree as coal
 import re
 import time
-import subprocess
+import subprocess, os, sys
+import signal
 # import pdb
 
 
@@ -96,6 +97,21 @@ except NameError:
     # default value
     gaplen = 0.5
 
+# catch ctrl-c gracefully
+_exitnow = []
+
+def catch_int(signal,frame):
+    _exitnow.append(True)
+    if len(_exitnow)>1:
+        logfile.write("Caught SIGINT twice, terminating immediately.\n")
+        logfile.flush()
+        raise SystemExit
+    else:
+        logfile.write("Caught SIGINT, exiting after this generation.  SIGINT again to terminate.\n")
+        logfile.flush()
+        pass
+
+signal.signal( signal.SIGINT, catch_int )
 
 # initialize
 pop = coal.initpop(sampsizes)
@@ -108,9 +124,9 @@ if (not set(mignames) == set(ancnenames)) or (not set(subpopnames) == set(ancnen
     raise TypeError("Inconsistent population names -- using command-line samplesizes?")
 
 # record "version number"
-githash, giterr = subprocess.Popen(["git",'rev-parse','HEAD'], stdout=subprocess.PIPE).communicate()
+githash, giterr = subprocess.Popen(["git",'--git-dir='+os.path.abspath(os.path.dirname(sys.argv[0])+'/.git'),'rev-parse','HEAD'], stdout=subprocess.PIPE).communicate()
 if giterr:
-    githash = ""
+    githash = "(none available)"
 logfile.write("sim-ibd-pedigree.py -- githash " + githash + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "\n")
 logfile.write("\n")
 logfile.write("options "+str(options)+"\n")
@@ -137,6 +153,9 @@ for t in xrange(ngens):
         logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
         logfile.flush()
     coal.parents(pop,ancne=ancnefn(pop,t),migprobs=migprobs(pop,t),t=t)
+    if _exitnow:
+        # there's been a ctrl-c; stop now.
+        break
 
 logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
 logfile.write("Done with simulation at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "; now writing out IBD info.\n" )
