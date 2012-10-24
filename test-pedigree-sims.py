@@ -34,8 +34,7 @@ for t in xrange(20):
 
 print time.time()-start
 
-coal.writeibd(pop,minlen=0.2,gaplen=0.1,filename="test.fibd.gz")
-
+# run this to look at the above.
 rscript <- '''
 source("~/projects/genome/ibd-blocks-fns.R")
 fnames <- list.files(".","test-fibd-[0-9]*.gz")
