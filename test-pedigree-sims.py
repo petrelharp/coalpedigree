@@ -1,7 +1,7 @@
 import sys
 import time
-import math
-import pdb
+import math, random
+import pdb, copy
 # import gc
 # import objgraph, inspect
 
@@ -12,8 +12,11 @@ reload(coal)
 
 ## Do one population, constant size
 
+random.seed(1234)
+
 sampsizes = dict( a=2 )
 migprobs = dict( [ (('a','a'),0.0) ] )
+ancne = dict(a=10)
 coal.chrlens = ( 2.0, 1.0 )
 coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 coal.chrlen = sum(coal.chrlens)  # the last one (total length)
@@ -21,19 +24,38 @@ coal.chrlen = sum(coal.chrlens)  # the last one (total length)
 start = time.time()
 
 pop = coal.initpop(sampsizes)
-# poplist = []
-# poplist.append(pop)
 ibdict = {}
+poplist = []
 for t in xrange(20):
-    coal.parents(pop,t=t,ibdict=ibdict,migprobs=migprobs,ancne=dict(a=10))
-    # poplist.append(pop)
+    coal.parents(pop,t=t,ibdict=ibdict,migprobs=migprobs,ancne=ancne)
     coal.sanity(pop,print_details=True)
+    coal.writeibd(pop,minlen=0.0,gaplen=0.0,filename="test-fibd-"+("%(t)02d" % {'t':t})+".gz")
+    poplist.append( copy.deepcopy(pop) )
 
 print time.time()-start
 
-coal.writeibd(pop,minlen=0.0,gaplen=0.0,filename="test.fibd.gz")
-
 coal.writeibd(pop,minlen=0.2,gaplen=0.1,filename="test.fibd.gz")
+
+rscript <- '''
+source("~/projects/genome/ibd-blocks-fns.R")
+fnames <- list.files(".","test-fibd-[0-9]*.gz")
+.chrlens <- c(2,1)
+.chrstarts <- c(0,2,3)
+
+ibd <- lapply( fnames, read.table, header=TRUE )
+for (k in seq_along(ibd)) {
+    ibd[[k]]$chrom <- findInterval( ibd[[k]]$start, .chrstarts, rightmost.closed=TRUE )
+    tmp <- length(.chrstarts) - findInterval( -ibd[[k]]$end, rev(-.chrstarts), rightmost.closed=TRUE )
+    if ( any( tmp!= ibd[[k]]$chrom ) ) { stop("oops! blocks spanning chromosome gap in generation ",k) }
+    ibd[[k]]$mapstart <- ibd[[k]]$start - .chrstarts[ibd[[k]]$chrom]
+    ibd[[k]]$mapend <- ibd[[k]]$end - .chrstarts[ibd[[k]]$chrom]
+}
+
+pdf(file="blocks.pdf",width=7,height=4)
+invisible( lapply( ibd, plotindivs, allids=0:3, chrspace=.1 ) )
+dev.off()
+'''
+
 
 # coal.writecoal(ibdict,filename="test.coal.gz")
 # objgraph.show_chain(objgraph.find_backref_chain(random.choice(objgraph.by_type('set')),inspect.ismodule),filename='chain.png')

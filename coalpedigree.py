@@ -278,8 +278,10 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
                 curi,anc = pending.popitem()
                 if curstate[ curi ] != anc:
                     for j,start in shared[curi].items():
-                        if j not in pending and curstate[j]!=anc:
-                            # finish off blocks
+                        if j not in pending and ((pos in chrpos) or (curstate[j]!=anc)):
+                            # finish off blocks that are not pending
+                            #   and no longer have the same state
+                            #   ... but finish blocks regardless if we're at a chromosome boundary
                             if j in shortones[curi]:
                                 dogaps = [ shend > start-gaplen for shstart,shend in shortones[curi][j] ]
                                 for shstart,shend in it.compress(shortones[curi][j],dogaps):
@@ -296,9 +298,12 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
                                     shortones[j][curi] = shortones[curi][j]
                             del shared[curi][j]
                             del shared[j][curi]
-                    for k in [ k for k in xrange(len(curstate)) if (k not in pending) and (curstate[k]==anc) ]:
-                        # begin new ones
+                    for k in [ k for k in xrange(len(curstate)) if (k not in pending) and (k not in shared[curi]) and (curstate[k]==anc) ]:
+                        # begin new blocks with other individuals, only if they 
+                        #  don't have a pending state change in the current set of operations,
+                        #  aren't already sharing a block, and have the same state,
                         shared[curi][k] = shared[k][curi] = pos
+                    # ok, now reset the current state
                     curstate[curi] = anc
     # finish off dangling blocks
     for i in shared.keys():
