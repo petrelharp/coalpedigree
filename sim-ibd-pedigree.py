@@ -151,7 +151,7 @@ for t in xrange(ngens):
     logfile.write("  t="+str(t)+"\n")
     if t%10==0:
         logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
-        logfile.flush()
+    logfile.flush()
     coal.parents(pop,ancne=ancnefn(pop,t),migprobs=migprobs(pop,t),t=t)
     if _exitnow:
         # there's been a ctrl-c; stop now.

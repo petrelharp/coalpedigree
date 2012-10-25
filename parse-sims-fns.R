@@ -9,33 +9,33 @@ coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob, sta
         migprobfn <- migprob
     }
     coal <- array(0,dim=c(max(gens),length(states),length(states)))
-    # Q[a,b,x,y] = P{ X(t) = x, Y(t) = y, tau>t | X(0)=a, Y(0)=b }
-    #  for indep't walks X,Y and their coalescent time tau
-    Q <- array(0, dim=rep(length(states),4))
-    for (a in states) for (b in states) {
-        Q[a,b,a,b] <- 1
-    }
+    # this indexes where coalescences can occur
+    samestates <- c( as.vector( diag(length(states))>0 ), FALSE )
+    # transition matrix for pairs: last state is the graveyard (coalescence)
+    transprobs <- cbind( rbind( diag(length(states)) %x% diag(length(states)), 0 ), 0 )
     for (t in 1:max(gens)) {
-        for (a in states) for (b in states) {
-            C <- as.vector(1/nesize(t))
-            M <- migprobfn(t)
-            coal[t,a,b] <- sum( diag(Q[a,b,,]) * C )
-            Q[a,b,,] <- t(M) %*% Q[a,b,,] %*% diag(1-C,nrow=length(C)) %*% M
-        }
+        C <- as.vector(1/nesize(t))
+        M <- cbind( rbind( migprobfn(t) %x% migprobfn(t), 0 ), 0 )
+        M[ samestates, ] <- (1-C)*M[ samestates, ] 
+        M[ samestates, ncol(M) ] <- C
+        transprobs <- transprobs %*% M
+        coal[t,,] <- transprobs[-nrow(M),ncol(M)]
     }
     dimnames(coal) <- c( list(NULL), dimnames(M) )
-    return(coal[match(gens,1:max(gens)),,])
+    return(coal[match(gens,1:max(gens)),,,drop=FALSE])
 }
 
 
 predict.blocks <- function ( L, opts ) {
-    coal <- coalprob(1:(max(attr(L,"gens"))/2),opts)
-    sampsize <- opts$sampsize
-    coal <- apply( coal, c(2,3), function (x) diff(c(0,cumsum(x)[attr(L,"gens")%/%2])) )
     # L gives number of blocks per constant rate of coalescence in windows of numbers of *meioses*;
-    #  we are working in 2*meioses (generations) here; so half of these are zero;
-    #  hack to fix this:
-    coal <- coal/2
+    #  coalprob works in 2*meioses (generations) here; so half of these are zero;
+    #  here we put in those zeros.
+    coalgens <- coalprob(1:(max(attr(L,"gens"))/2),opts)
+    coal <- numeric( 2*prod(dim(coalgens)) )
+    coal[ 2*(1:prod(dim(coalgens))) ] <- coalgens
+    dim(coal) <- c( 2*dim(coalgens)[1], dim(coalgens)[-1] )
+    sampsize <- opts$sampsize
+    coal <- apply( coal, c(2,3), function (x) diff(c(0,cumsum(x)[attr(L,"gens")]))/diff(c(0,attr(L,"gens"))) )
     npairs <- outer(sampsize,sampsize,"*")
     diag(npairs) <- choose(sampsize,2)
     coal <- coal * rep(npairs, each=dim(coal)[1])
@@ -45,7 +45,7 @@ predict.blocks <- function ( L, opts ) {
     return( rowSums(blocklens) )
 }
 
-## automatically get options out?
+## automatically get stuff out of python dict text format
 
 parsedict <- function(x) {
     # Parse the text string corresponding to a python dict

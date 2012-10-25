@@ -5,7 +5,7 @@
           a and b are similar sized, constant
 
    Run with e.g.
-    ( BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-2.fibd.gz -l ${BFIX}-growing-migration-2.log -t 150 -i ~/projects/coalpedigree/sim-demographics-2.py )&
+    ( BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-growing-migration-2.fibd.gz -l ${BFIX}-growing-migration-2.log -t 150 -i ~/projects/coalpedigree/sim-demographics-2.py -e .001 )&
 
 '''
 import math
