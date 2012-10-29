@@ -16,8 +16,7 @@ time; how much data you get depends strongly on the length threshold for gaps
 to write out and on the effective population size (smaller Ne = more blocks).
 
 Running with 1000 samples for 200 generations takes about 6G of memory by the end,
-and about 11 hours.
-
+and about 12 hours to run and 2 hours to write out the data.
 
 coalpedigree.py       -- module
 sim-ibd-pedigree.py   -- a script to run it, do 'python sim-ibd-pedigree.py -h' for help

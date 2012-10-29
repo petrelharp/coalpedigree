@@ -18,7 +18,7 @@ growthtime = 30
 splitsize = 10000
 nesize = 3000000
 
-def ancnefn(pop,t):
+def ancnefn(t):
     ancne = dict( a=nesize, b=nesize )
     if t>splittime:
         ancne['c'] = splitsize
@@ -26,7 +26,7 @@ def ancnefn(pop,t):
         ancne['c'] = int( nesize - (nesize-splitsize)*math.exp( (splittime-t) * math.log(.1)/growthtime ) )
     return ancne
 
-def migprobs(pop,t):
+def migprobs(t):
     migprobs = {}.fromkeys( [('a','b'), ('a','c'), ('b','a'), ('c','a')], .005  )
     if t>splittime:
         migprobs[('b','a')] = 1.0

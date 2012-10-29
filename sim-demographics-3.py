@@ -12,15 +12,14 @@ import math
 
 sampsizes = dict( zip(['a','b'],[500,500]) )
 
-# smaller Ne and smaller chromosomes
 splittime = 60
 nesize = 3000000
 
-def ancnefn(pop,t):
+def ancnefn(t):
     ancne = dict( a=nesize, b=nesize )
     return ancne
 
-def migprobs(pop,t):
+def migprobs(t):
     if t>splittime:
         migprobs = {}.fromkeys( [('a','b'), ('b','a')], .005  )
     else:

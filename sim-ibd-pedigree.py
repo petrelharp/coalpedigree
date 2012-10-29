@@ -2,8 +2,8 @@
 description = '''Simulate IBD segments in a diploid population.
     infile should contain code defining
        sampsizes -- a dict whose values are the sample sizes
-       ancnefn(pop,t) -- a function returning a dict whose keys are population names and whose values are effective population sizes in generation t
-       migprobs(pop,t) -- a function returning a dict whose keys are pairs (tuples) of population names (x,y) 
+       ancnefn(t) -- a function returning a dict whose keys are population names and whose values are effective population sizes in generation t
+       migprobs(t) -- a function returning a dict whose keys are pairs (tuples) of population names (x,y) 
            and whose values are backwards migration rates from x to y in generation t
     Here pop is a dict whose keys give the names of the populations (the same as the keys of sampsizes)
        and if ancnefn or migprobs can also be dicts rather than functions (i.e. constant).
@@ -49,21 +49,21 @@ logfile = coal.fileopt(options.logfile, "w")
 ngens = int(options.ngens)
 
 if options.nesize is not None:
-    ancnefn = lambda pop,t: {}.fromkeys(pop.keys(),int(options.nesize))
+    ancnefn = lambda t: {}.fromkeys(pop.keys(),int(options.nesize))
 else:
     try:
         if type(ancnefn) == type({}):
-            ancnefn = lambda pop,t: ancnefn
+            ancnefn = lambda t: ancnefn
     except NameError:
         print("Effective pop sizes (ancne) needs to be specified on the command line (-n) or in the input file (-i).")
         raise
 
 if options.migprob is not None:
-    migprobs = lambda pop,t: {}.fromkeys([(x,y) for x in pop.keys() for y in pop.keys()],float(options.migprob))
+    migprobs = lambda t: {}.fromkeys([(x,y) for x in pop.keys() for y in pop.keys()],float(options.migprob))
 else:
     try:
         if type(migprobs) == type({}):
-            migprobs = lambda pop,t: migprobs
+            migprobs = lambda t: migprobs
     except NameError:
         print("Migration rates (migprobs) need to be specified on the command line (-m) or in the input file (-i).")
         raise
@@ -117,8 +117,8 @@ signal.signal( signal.SIGINT, catch_int )
 pop = coal.initpop(sampsizes)
 
 # sanity checks
-mignames = reduce( lambda x,y: x+y, [ [u,v] for (u,v) in migprobs(pop,t=1).keys() ] )
-ancnenames = ancnefn(pop,t=1).keys()
+mignames = reduce( lambda x,y: x+y, [ [u,v] for (u,v) in migprobs(t=1).keys() ] )
+ancnenames = ancnefn(t=1).keys()
 subpopnames = pop.keys()
 if (not set(mignames) == set(ancnenames)) or (not set(subpopnames) == set(ancnenames) ):
     raise TypeError("Inconsistent population names -- using command-line samplesizes?")
@@ -141,18 +141,19 @@ logfile.write("ngens: " + str(ngens)+"\n")
 logfile.write("sampsizes: " + str(sampsizes)+"\n")
 logfile.write("minlen: " + str(minlen)+"\n")
 logfile.write("gaplen: " + str(gaplen)+"\n")
-logfile.write("Ne at 1: " + str(ancnefn(pop,t=1))+"\n")
-logfile.write("migprob at 1: " + str(migprobs(pop,t=1))+"\n")
+logfile.write("Ne at 1: " + str(ancnefn(t=1))+"\n")
+logfile.write("migprob at 1: " + str(migprobs(t=1))+"\n")
 logfile.write("chromosome ending positions: " + str(list(coal.chrpos)+[coal.chrlen]) + "\n")
 logfile.write("\n")
 logfile.write("Beginning ------------\n")
 
+# here is where the action happens
 for t in xrange(ngens):
     logfile.write("  t="+str(t)+"\n")
     if t%10==0:
         logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
     logfile.flush()
-    coal.parents(pop,ancne=ancnefn(pop,t),migprobs=migprobs(pop,t),t=t)
+    coal.parents(pop,ancne=ancnefn(t),migprobs=migprobs(t),t=t)
     if _exitnow:
         # there's been a ctrl-c; stop now.
         break

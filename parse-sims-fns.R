@@ -1,6 +1,6 @@
 
 
-coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob, states=seq_along(nesize(1)) ) {
+coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob ) {
     # compute coalescent probs from nesize and migprob, recursively
     # note that gens is in *generations* =  2*meioses
     if (is.null(dim(migprob(1)))) {
@@ -8,20 +8,30 @@ coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob, sta
     } else {
         migprobfn <- migprob
     }
+    if (is.null(colnames(migprobfn(1)))) {
+        states <- 1:ncol(migprobfn(1))
+    } else {
+        states <- colnames(migprobfn(1))
+    }
     coal <- array(0,dim=c(max(gens),length(states),length(states)))
+    dimnames(coal) <- list( NULL, states, states )
     # this indexes where coalescences can occur
     samestates <- c( as.vector( diag(length(states))>0 ), FALSE )
     # transition matrix for pairs: last state is the graveyard (coalescence)
     transprobs <- cbind( rbind( diag(length(states)) %x% diag(length(states)), 0 ), 0 )
     for (t in 1:max(gens)) {
-        C <- as.vector(1/nesize(t))
-        M <- cbind( rbind( migprobfn(t) %x% migprobfn(t), 0 ), 0 )
-        M[ samestates, ] <- (1-C)*M[ samestates, ] 
-        M[ samestates, ncol(M) ] <- C
-        transprobs <- transprobs %*% M
-        coal[t,,] <- transprobs[-nrow(M),ncol(M)]
+        if (!missing(opts) & t>opts$ngens) {
+            # only ran the simulation so long
+            coal[t,,] <- 0
+        } else {
+            C <- as.vector(1/nesize(t))
+            M <- cbind( rbind( migprobfn(t) %x% migprobfn(t), 0 ), 0 )
+            M[ samestates, ] <- (1-C)*M[ samestates, ] 
+            M[ samestates, ncol(M) ] <- C
+            transprobs <- transprobs %*% M
+            coal[t,,] <- transprobs[-nrow(M),ncol(M)]
+        }
     }
-    dimnames(coal) <- c( list(NULL), dimnames(M) )
     return(coal[match(gens,1:max(gens)),,,drop=FALSE])
 }
 
@@ -42,7 +52,8 @@ predict.blocks <- function ( L, opts ) {
     dim(coal) <- c( dim(coal)[1], length(coal)/dim(coal)[1] )
     coal <- coal[,upper.tri(npairs,diag=TRUE)]
     blocklens <- L%*%coal
-    return( rowSums(blocklens) )
+    colnames(blocklens) <- paste( rownames(npairs)[row(npairs)], colnames(npairs)[col(npairs)], sep="-" )[upper.tri(npairs,diag=TRUE)] 
+    return( (blocklens) )
 }
 
 ## automatically get stuff out of python dict text format

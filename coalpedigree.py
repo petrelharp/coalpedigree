@@ -24,7 +24,7 @@ import random
 import gzip
 import sys
 import bisect
-from collections import defaultdict
+from collections import defaultdict, Counter
 import heapq
 import itertools as it
 
@@ -37,101 +37,84 @@ chrlen = sum(chrlens)  # the last one (total length)
 # this is actually the number of parents... so it will work (?) for ploidy=4 but will not be biological.
 ploidy = 2
 
-def initpop(sampsizes):
-    '''A pop is dict of: 
-       location: [ dict of [ maternal chrom, paternal chrom ]s ]
-        keys in each subpop dict are integers
-        chromsomes are two lists, [ pos_i ] (in order) and [ anc_i ], with anc_i the ancestral chromosome of [pos_i,pos_i+1).
+def initpop(sampsizes,ancne):
+    '''A pop is list of [ maternal chrom, paternal chrom ]s
+          chromsomes are two lists, [ pos_i ] (in order) and [ anc_i ], with anc_i the ancestral chromosome of [pos_i,pos_i+1).
        Sampled diploid individual n has chromosomes numbers ploidy*n ... (ploidy+1)*n-1.
+       The individuals in population k are numbered sum(ancne[:k]),...,sum(ancne[:k+1])-1.
     '''
-    pop = {}.fromkeys( sampsizes.keys() )
-    k = 0
-    for x in pop:
-        pop[x] = {}.fromkeys( xrange(sampsizes[x]) )
-        for ind in pop[x]:
-            pop[x][ind] =  [ [ [ 0.0 ],  [ k+j ] ] for j in range(ploidy) ]
-            k += ploidy
+    ordlabs = sorted(ancne.keys())  # ensure consistent order
+    nesizes = [ ancne[x] for x in ordlabs ]
+    if type(sampsizes)==type({}):
+        sampsizes = [ sampsizes[x] for x in ordlabs ]
+    if any( [ x>y for x,y in zip(sampsizes,nesizes) ] ):
+        raise ValueError("More samples than are in the population: "+str(zip(sampsizes,nesizes)))
+    diploids = [ sum(nesizes[:k])+j for k in xrange(len(sampsizes)) for j in xrange(sampsizes[k]) ]
+    pop = [ [ [ [ 0.0 ],  [ ploidy*k+j ] ] for j in xrange(ploidy) ] for k in diploids ]
     return pop
 
 
-def census(pop):
+def census(pop,sampsizes=None,ancne=None):
     '''Return number of individuals and number of breakpoints
     in each subpopulation.
     '''
-    nindivs = [ len(pop[x]) for x in pop ]
-    nchroms = [ sum( map( lambda u: len(u[0][0])+len(u[1][0]), pop[x].values() ) ) for x in pop ]
-    return zip( nindivs, nchroms )
+    nchroms = sum( map( lambda u: len(u[0][0])+len(u[1][0]), pop ) )
+    subpops = []
+    if sampsizes and ancne:
+        ordlabs = sorted(ancne.keys())  # ensure consistent order
+        k = 0
+        for nsamps in [ sampsizes[x] for x in ordlabs ]:
+            thispop = Counter()
+            for j in xrange(k,k+nsamps):
+                for ii in xrange(ploidy):
+                    thispop.update( getsubpop(pop[j][ii][1],ancne) )
+            k = k+nsamps
+            subpops.append( thispop )
+    return nchroms, subpops
 
 
-def sanity(pop,print_details=False):
+def getsubpop(inds,ancne):
+    '''Which subpopulation is a chromosome in?'''
+    ordlabs = sorted(ancne.keys())  # ensure consistent order
+    cumne = [ ancne[x] for x in ordlabs ]
+    cumne = [ sum(cumne[:k]) for k in xrange(len(cumne)+1) ]
+    subpops = [ 0 for k in inds ]
+    for k in xrange(len(ordlabs)):
+        for j in xrange(len(inds)):
+            if (inds[j]//ploidy) >= cumne[k+1]:
+                subpops[j] += 1
+    return [ ordlabs[k] for k in subpops ]
+
+
+def sanity(pop,sampsizes=None,ancne=None,print_details=False):
     '''Do some sanity checks.
     '''
     errors = []
-    for x in pop:
-        for ind in pop[x]:
-            try:
-                # diploid?
-                if len(pop[x][ind]) != ploidy:
-                    errors.append( (x,ind) )
+    for ind in xrange(len(pop)):
+        try:
+            # diploid?
+            if len(pop[ind]) != ploidy:
+                errors.append( ind )
+                if print_details:
+                    print "Oops!  Are we not diploid?"
+                    print ind, pop[ind]
+            # all chromosomes of the proper form?
+            for chrom in pop[ind]:
+                if len(chrom)!=2 or len(chrom[0])!=len(chrom[1]) or any( [ (chrom[0][k+1]<=chrom[0][k]) for k in xrange(len(chrom[0])-1) ] ):
+                    errors.append(ind)
                     if print_details:
-                        print "Oops!  Are we not diploid?"
-                        print x, ind, pop[x][ind]
-                # all chromosomes of the proper form?
-                for chrom in pop[x][ind]:
-                    if len(chrom)!=2 or len(chrom[0])!=len(chrom[1]) or any( [ (chrom[0][k+1]<=chrom[0][k]) for k in xrange(len(chrom[0])-1) ] ):
-                        errors.append((x,ind))
-                        if print_details:
-                            print "Malformed chromosomes?"
-                            print x, ind, pop[x][ind]
-
-
-            except:
-                print "Something bad just happened with"
-                print pop[x][ind]
-                raise
+                        print "Malformed chromosomes?"
+                        print ind, pop[ind]
+        except:
+            print "Something bad just happened with"
+            print pop[ind]
+            raise
     if not errors:
-        print "All good!", census(pop)
+        print "All good!", census(pop,sampsizes,ancne)
     else:
         print len(errors), "errors, oh dear!"
         return errors
 
-
-def combine(chroms,ibd):
-    '''Given a list of diploid individuals, combine them into a single one.
-       For each of the maternal/paternal chromosomes,
-       move through all contributing chromosomes in parallel,
-       updating the current state for each, and combining them into the output state.
-
-       When at least two nonempty states are combined,
-       this is a coalescence;
-       record the collection of states and the position of the segment in the list 'ibd'.
-    '''
-    if len(chroms)==1:
-        return chroms[0]
-    matpat = [[],[]]
-    for ii in range(ploidy):
-        whereat = [ 0 for chrom in chroms ]  # current locations on each chromosome
-        nextones = [ ( chroms[k][ii][0] if len(chroms[k][ii])>0  else None ) for k in range(len(chroms)) ]
-        thisstate = [ set() for u in nextones ]
-        while any( nextones ):
-            nextpos = min( [ u[0] for u in nextones if u ] )
-            for j in range(len(whereat)):
-                if nextones[j]:
-                    if (nextones[j][0] == nextpos):
-                        thisstate[j] = nextones[j][1]
-                        whereat[j] += 1
-                        try:
-                            nextones[j] = chroms[j][ii][whereat[j]] 
-                        except IndexError:
-                            # i.e. we've got to the end of chroms[j][ii]
-                            nextones[j] = None
-            combining = [ x for x in thisstate if x ]
-            combstate = set().union(*combining)
-            if ibd and len( combining ) > 1:
-                nextnextpos = min( [ u[0] for u in nextones if u ] )
-                ibd.append( (nextpos,nextnextpos,combining) )
-            matpat[ii].append( (nextpos, combstate) )
-    return matpat
 
 def getrecombs():
     # assign crossover locations -- begin with random subset of breaks between chromosomes
@@ -144,80 +127,74 @@ def getrecombs():
     crossovers.sort()
     return crossovers
 
+
+def parentfactory(ancne,migprobs):
+    '''Return a function that will pick a random (diploid) parent for a given (diploid) individual.
+    Note that migration probabilities are *reverse-time* migration probabilities,
+    i.e. migprobs[(x,y)] is the probability that a parent of someone in x is from y.
+    '''
+    if len(ancne)>1:
+        ordlabs = sorted(ancne.keys())  # ensure consistent order
+        cumne = [ ancne[x] for x in ordlabs ]
+        cumne = [ sum(cumne[:k]) for k in xrange(len(cumne)+1) ]
+        cumprobs = [ [ migprobs.get((x,y),0) for y in ordlabs ] for x in ordlabs ]
+        # assign missing probabilities to diagonal
+        totprobs = map( sum, cumprobs )
+        if any([p>1 for p in totprobs]):
+            raise ValueError("Migration probabilities sum to >1, oops!")
+        for k in xrange(len(cumprobs)):
+            cumprobs[k][k] += 1-totprobs[k]
+            cumprobs[k] = [ sum(cumprobs[k][:j+1]) for j in xrange(len(cumprobs[k])) ]
+        def pickparent(ind):
+            x = 0
+            while ind>=cumne[x+1]:
+                x+=1
+            y = bisect.bisect_left( cumprobs[x], random.random() )
+            return cumne[y] + random.sample(xrange(ancne[ordlabs[y]]),1)[0]
+    else:
+        def pickparent(ind):
+            return random.sample(xrange(ancne.values()[0]),1)[0]
+    return pickparent
+
+
 def parents(pop,ancne,migprobs,t=0,ibdict=None,writeto=None):
     '''Reallocate each chromosome to the ancestors,
     and then recombine within each individual to resolve the mat/pat chromosomes.
     Optionally, write out to writeto rather than recording in ibdict.
-      Note that combine() actually does the recording of events of interest in ibdict.
     '''
-    cumne = [ ancne[x] for x in pop ]
-    cumne = dict( zip( pop.keys(), [ sum(cumne[:k]) for k in range(len(cumne)) ] ) )
-
-    parentdict = defaultdict()  # this is of the form chrom: parent, with parent diploid
-    recombdict = defaultdict(getrecombs)  # this is of the form parent: [recomb locs]
-    for x in pop:
-        if len(pop)>1:
-            cumprobs = [ migprobs.get((x,y),0) for y in pop.keys() ] 
-            cumprobs = [ sum( cumprobs[:(k+1)] ) for k in range(len(cumprobs)) ]
-            loclabs = pop.keys() + [x]
-
-            def pickparent():
-                y = loclabs[ bisect.bisect_left( cumprobs, random.random() )]
-                return cumne[y] + random.sample(xrange(ancne[y]),1)[0]
-        else:
-            def pickparent():
-                return random.sample(xrange(ancne.values()[0]),1)[0]
-
-        parentdict.default_factory = pickparent
-
-        for ind in pop[x]:
-            for ii in xrange(ploidy):
-                pos,anc = pop[x][ind][ii]
-                newpos = []
-                newanc = []
-                for k in xrange(len(pos)):
+    parentdict = {}  # this is of the form chrom: diploid parent
+    pickparent = parentfactory(ancne,migprobs)  # function to choose a parent
+    recombdict = defaultdict(getrecombs)  # this is of the form diploid indiv: [recomb locs]
+    for ind in xrange(len(pop)):
+        for ii in xrange(ploidy):
+            pos,anc = pop[ind][ii]
+            newpos = []
+            newanc = []
+            for k in xrange(len(pos)):
+                try:
                     mapa = parentdict[ anc[k] ]
-                    recombs = recombdict[mapa]
-                    # recombs[0] < ... < recombs[whichseg-1] < pos[k] <= recombs[whichseg]
-                    whichseg = bisect.bisect_left( recombs, pos[k] )
-                    if whichseg == len(recombs) or pos[k] != recombs[whichseg]:
-                        newpos.append( pos[k] )
-                        newanc.append( mapa*ploidy + (whichseg%ploidy) )
-                    while whichseg < len(recombs) and ( k == (len(pos)-1) or recombs[whichseg] < pos[k+1] ):
-                        newpos.append( recombs[whichseg] )
-                        whichseg += 1
-                        newanc.append( mapa*ploidy + (whichseg%ploidy) )
-                pop[x][ind][ii] = newpos,newanc
+                except KeyError:
+                    mapa = parentdict[ anc[k] ] = pickparent(anc[k]//ploidy)
+                recombs = recombdict[ anc[k] ]
+                # recombs[0] < ... < recombs[whichseg-1] < pos[k] <= recombs[whichseg]
+                whichseg = bisect.bisect_left( recombs, pos[k] )
+                if whichseg == len(recombs) or pos[k] != recombs[whichseg]:
+                    newpos.append( pos[k] )
+                    newanc.append( mapa*ploidy + (whichseg%ploidy) )
+                while whichseg < len(recombs) and ( k == (len(pos)-1) or recombs[whichseg] < pos[k+1] ):
+                    newpos.append( recombs[whichseg] )
+                    whichseg += 1
+                    newanc.append( mapa*ploidy + (whichseg%ploidy) )
+            pop[ind][ii] = newpos,newanc
+    # all done!
+    return None
 
-def writecoal(ibdict,filename="coalpedigree.coal.gz",outfile=None,closeafter=True,writeheader=True):
-    '''Write out all info in ibdict into a file.
-    The file is of the form:
-        time, unique identifying number, chromsome position start, end, population label of ancestral individual, and coalescing ids,
-    where ids is the string representation of the list of sets of coalescing ids
-    e.g. '[[2,3],[9],[1,10]]' means that 1,2,3,9,10 share this segment in a common ancestor for the first time,
-    but that 2 and 3 had "already" inherited the segment in a more recent ancestor, as did 1 and 10.
-    '''
-    if outfile is None:
-        outfile = fileopt(filename,"w")
-    blockid = 0
-    if writeheader:
-        header = ["t", "blockid", "start", "end", "location", "ids"]
-        outfile.write(" ".join(header)+"\n") 
-    for t in ibdict:
-        for x in ibdict[t]:
-            for start,end,ids in ibdict[t][x]:
-                outfile.write(" ".join(map(str,[t,blockid,start,end,x])+[str(map(list,ids)).translate(None," ")])+"\n")
-                blockid += 1
-    if closeafter:
-        outfile.close()
-    print blockid, "blocks written"
 
 
 def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=True,outfile=None):
     '''Write out pairwise IBD info from the output of collectibd,
     restricting to segments at least minlen long OR at least as close as gaplen to another segment,
     and optionally simplifying by pasting together adjacent blocks shared with the same individual.
-    Note that id1,id2 are in sorted order to avoid redundancy.
 
     Do this by stepping along the genome in parallel along all chromosomes.
     '''
@@ -228,10 +205,9 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
         newfile = False
     header = ["id1", "id2", "start", "end"]
     outfile.write(" ".join(header)+"\n") 
-    chromlist = []
-    for x in pop:
-        for ind in pop[x]:
-            chromlist.extend( [ it.izip(pos,anc) for pos,anc in pop[x][ind] ] )
+    chromlist = []  # list of iterators along each chromosome
+    for ind in xrange(len(pop)):
+        chromlist.extend( [ it.izip(pos,anc) for pos,anc in pop[ind] ] )
     shared = {}.fromkeys(xrange(len(chromlist)))  # ind : { other:pos } where began sharing with other at pos
     shortones = {}.fromkeys(xrange(len(chromlist)))  # pending short ones that might be appended if there's another soon
     for ii in shared:
@@ -247,7 +223,7 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
         (pos,anc),curi = heapq.heappop( thestack )
         curstate[curi] = anc
     # sanity
-    if filter( lambda x: x is None, curstate ):
+    if any( [ x is None for x in curstate ]):
         raise ValueError("writeibd: Wrong number of 0.0s found?!?")
     # refill thestack
     for j in xrange(len(chromlist)):
@@ -276,7 +252,7 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
         else:
             while pending:
                 curi,anc = pending.popitem()
-                if curstate[ curi ] != anc:
+                if (pos in chrpos) or (curstate[ curi ] != anc):
                     for j,start in shared[curi].items():
                         if j not in pending and ((pos in chrpos) or (curstate[j]!=anc)):
                             # finish off blocks that are not pending
@@ -291,6 +267,8 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
                             else:
                                 dogaps = [False]
                             if any(dogaps) or pos-start > minlen:
+                                # if any( [ (start-z)*(z-pos)>0 for z in chrpos ] ):
+                                #     import pdb; pdb.set_trace()
                                 outfile.write( " ".join(map(str,[curi,j,start,pos])) + "\n" )
                             else:
                                 shortones[curi][j].append( (start,pos) )
@@ -298,7 +276,7 @@ def writeibd(pop,minlen=0.0,gaplen=0.0,filename="coalpedigree.ibd.gz",simplify=T
                                     shortones[j][curi] = shortones[curi][j]
                             del shared[curi][j]
                             del shared[j][curi]
-                    for k in [ k for k in xrange(len(curstate)) if (k not in pending) and (k not in shared[curi]) and (curstate[k]==anc) ]:
+                    for k in [ k for k in xrange(len(curstate)) if (k != curi) and (k not in pending) and (k not in shared[curi]) and (curstate[k]==anc) ]:
                         # begin new blocks with other individuals, only if they 
                         #  don't have a pending state change in the current set of operations,
                         #  aren't already sharing a block, and have the same state,

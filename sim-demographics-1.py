@@ -10,10 +10,10 @@ sampsizes = dict( a=1000 )
 
 nesize = 10000
 
-def ancnefn(pop,t):
+def ancnefn(t):
     ancne = dict( a=nesize )
     return ancne
 
-def migprobs(pop,t):
+def migprobs(t):
     migprobs = {}.fromkeys([('a','a')],1.0)
     return migprobs
