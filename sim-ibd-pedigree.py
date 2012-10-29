@@ -114,13 +114,12 @@ def catch_int(signal,frame):
 signal.signal( signal.SIGINT, catch_int )
 
 # initialize
-pop = coal.initpop(sampsizes)
+pop = coal.initpop(sampsizes,ancnefn(t=1))
 
 # sanity checks
 mignames = reduce( lambda x,y: x+y, [ [u,v] for (u,v) in migprobs(t=1).keys() ] )
 ancnenames = ancnefn(t=1).keys()
-subpopnames = pop.keys()
-if (not set(mignames) == set(ancnenames)) or (not set(subpopnames) == set(ancnenames) ):
+if (not set(mignames) == set(ancnenames)):
     raise TypeError("Inconsistent population names -- using command-line samplesizes?")
 
 # record "version number"

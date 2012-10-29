@@ -191,20 +191,13 @@ t.timeit()
 import cProfile, pstats, trace
 
 stmt = '''
-sampsizes = dict( a=30 )
-pop = coal.initpop(sampsizes)
+sampsizes = dict( a=10, b=10 )
+ancne = dict(a=10000,b=10000)
+pop = coal.initpop(sampsizes,ancne)
 outfile = file("test.fibd.gz","w")
+migprobs = dict( [ (('a','b'),0.01),(('b','a'),0.01) ] )
 for t in xrange(40):
-    pop = coal.parents(pop,t=t,writeto=outfile,ancne=dict(a=10000))
-'''
-
-stmt = '''
-sampsizes = dict( a=30 )
-pop = coal.initpop(sampsizes)
-ibdict = {}
-outfile = file("test.fibd.gz","w")
-for t in xrange(40):
-    pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=dict(a=10000))
+    coal.parents(pop,t=t,migprobs=migprobs,ancne=ancne)
 '''
 
 cProfile.run(stmt,"/tmp/simprof")
@@ -212,7 +205,7 @@ p = pstats.Stats("/tmp/simprof")
 p.strip_dirs()
 p.print_stats()
 
-tracer = trace.Trace(trace=1,count=1)
+tracer = trace.Trace(trace=0,count=1)
 tracer.run(stmt)
 r = tracer.results()
 r.write_results(show_missing=True, coverdir="/tmp")
