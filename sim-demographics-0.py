@@ -7,6 +7,7 @@
    Run with e.g.
     ( BFIX=$(printf %05d $RANDOM); time nice -19 python ~/projects/coalpedigree/sim-ibd-pedigree.py -b ${BFIX}-migration-0.fibd.gz -l ${BFIX}-migration-0.log -t 200 -i ~/projects/coalpedigree/sim-demographics-0.py -e .0001 )&
 
+    Should take about 4m and produce about 1M blocks (above .01cM).
 '''
 import math
 
