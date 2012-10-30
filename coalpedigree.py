@@ -172,9 +172,11 @@ def parents(pop,ancne,migprobs,t=0,ibdict=None,writeto=None):
             newanc = []
             for k in xrange(len(pos)):
                 try:
+                    # anc[k] is the current ancestral chromosome; mapa is the diploid parent that chromosome came from
                     mapa = parentdict[ anc[k] ]
                 except KeyError:
-                    mapa = parentdict[ anc[k] ] = pickparent(anc[k]//ploidy)
+                    mapa = parentdict[ anc[k] ] = pickparent(anc[k]//ploidy)  # pickparent wants a diploid index
+                # each haploid (e.g. anc[k]) is the product of a unique meiosis (between chromosomes of mapa)
                 recombs = recombdict[ anc[k] ]
                 # recombs[0] < ... < recombs[whichseg-1] < pos[k] <= recombs[whichseg]
                 whichseg = bisect.bisect_left( recombs, pos[k] )
