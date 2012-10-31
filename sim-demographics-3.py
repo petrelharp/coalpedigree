@@ -12,7 +12,7 @@ import math
 
 sampsizes = dict( zip(['a','b'],[500,500]) )
 
-splittime = 60
+splittime = 10
 nesize = 3000000
 
 def ancnefn(t):

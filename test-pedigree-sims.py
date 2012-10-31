@@ -99,60 +99,7 @@ for t in xrange(150):
 
 print time.time()-start
 
-# objgraph.show_most_common_types()
- 
-nzeros = [ sum( map( lambda x: sum( map( lambda y: sum( [ ( 1 if len(z[1])==0 else 0 ) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of zero-sets
-nsets = [ sum( map( lambda x: sum( map( lambda y: sum( [ len(z[1]) for z in y ] ), x ) ), d.values() ) ) for d in pop.values() ]  # number of set elements
-nbreaks = [ sum( map( lambda x: len(x[0])+len(x[1]), d.values() ) ) for d in pop.values() ]  # number of breakpoints
-ninds = map( len, pop.values() )
-[ (1.0*c/d,1.0*a/b,1.0*c/(b-a)) for a,b,c,d in zip( nzeros, nbreaks, nsets, ninds ) ]  # mean number of sets, mean proportion of sets that are empty and mean size of nonzero sets
-# this is how many numbers?
-sum(nbreaks) , sum(nsets)
-newpop = {}.fromkeys(range(3))
-ninds = [40896, 15736, 29079]
-for x in range(3):
-    newpop[x] = {}.fromkeys(range(ninds[x]))
-    for y in newpop[x]:
-        newpop[x][y] = [ [ ( 0.0, set(range(1)) ) for j in range(20) ], [ ( 0.0, set() ) for j in range(20) ] ]
-    
 
-del pop
-gc.collect()
-objgraph.show_most_common_types()
-objgraph.show_growth()
-showthis = random.choice(objgraph.by_type('set')); showthis; objgraph.show_chain(objgraph.find_backref_chain(showthis,inspect.ismodule),filename='chain.png')
-
-
-
-####### testing
-import coalpedigree as coal
-import time
-
-sampsizes = dict( zip([0,1,2],[500,1000,1500]) )
-def ancne (t):
-    if t<25:
-        return dict( zip([0,1,2],[10000,10000,10000]) )
-    else:
-        return dict( zip([0,1,2],[10000,10000,100]) )
-
-ancne = dict( zip([0,1,2],[10000,10000,10000]) )
-pop = coal.initpop(sampsizes)
-ibdict = {}
-migprobs = {}.fromkeys( [ (x,y) for x in pop.keys() for y in pop.keys() ], .01 )
-# outfile = file("/tmp/testing.gz","w")
-
-starttime = time.time()
-
-for t in xrange(30):
-    pop = coal.parents(pop,t=t,ibdict=ibdict,ancne=ancne)
-    # pop = coal.parents(pop,t=t,writeto=outfile)
-    #coal.sanity(pop)
-    pop = coal.migrate(pop,migprobs)
-    #coal.sanity(pop)
-
-time.time() - starttime
-
-outfile.close()
 
 ######## time it better
 
@@ -167,8 +114,8 @@ ibdict = {}
 
 stmt = '''
 for n in xrange(300):
-    pop = coalpedigree.parents(pop,t=n,ibdict=ibdict)
-    pop = coalpedigree.migrate(pop)
+    coalpedigree.parents(pop,t=n,ibdict=ibdict)
+    coalpedigree.migrate(pop)
 '''
 
 t = timeit.Timer(stmt=stmt,setup=setup)

@@ -9,6 +9,16 @@ description = '''Simulate IBD segments in a diploid population.
        and if ancnefn or migprobs can also be dicts rather than functions (i.e. constant).
     Some of these can be passed in on the command line.
 
+    Peak memory usage is:
+        pop: [ number of breakpoints in sample ] -> float
+            and  [ number of breakpoints in sample ] -> int
+        recombdict: [ number of breakpoints in ancestors ] -> float
+        parentdict: ploidy * [ number of ancestors ] -> int
+        and [ number of breakpoints in sample ] = x =
+            ploidy * (number of samples) * ( (number of generations)*(total genome length) + (number of chromosomes) )
+        and [ number of ancestors ] ~ [ effective pop size ] * ( 1- exp(-[number of samples]/[effective pop size]) )
+        and [ number of breakpoints in ancestors ] = ploidy * ( total genome length + number of chromosome ) * [ number of ancestors ]
+
     Example:
           python sim-ibd-pedigree.py -i sim-demographics-2.py -t 10 -b test.ibd.gz -l test.log
     '''
