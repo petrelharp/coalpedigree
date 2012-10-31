@@ -7,18 +7,13 @@
 #    (at your option) any later version.
 #
 #    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    but without any warranty; without even the implied warranty of
+#    merchantability or fitness for a particular purpose.  See the
 #    GNU General Public License for more details.
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# simulate backwards through a pedigree
-# individuals are encoded as
-#   location (x), generation (t)
-#   samples inheriting on which contiguous piece of chromosome (n,a,b)
-# each generation, coalesce, recombine, migrate.
 
 import random
 import gzip
@@ -37,53 +32,44 @@ chrlen = sum(chrlens)  # the last one (total length)
 # this is actually the number of parents... so it will work (?) for ploidy=4 but will not be biological.
 ploidy = 2
 
-def initpop(sampsizes,ancne):
+# this number should be larger than Ne will ever be
+maxne = 10**8  # since maximum integer size on some machines is 2**31, this restricts us to at most 21 populations?
+
+def initpop(sampsizes):
     '''A pop is list of [ maternal chrom, paternal chrom ]s
           chromsomes are two lists, [ pos_i ] (in order) and [ anc_i ], with anc_i the ancestral chromosome of [pos_i,pos_i+1).
-       Sampled diploid individual n has chromosomes numbers ploidy*n ... (ploidy+1)*n-1.
-       The individuals in population k are numbered sum(ancne[:k]),...,sum(ancne[:k+1])-1.
+       Sampled diploid individual n in population k has chromosomes numbers k*maxne + ploidy*n ... k*maxne + (ploidy+1)*n-1.
     '''
-    ordlabs = sorted(ancne.keys())  # ensure consistent order
-    nesizes = [ ancne[x] for x in ordlabs ]
+    ordlabs = sorted(sampsizes.keys())  # ensure consistent order
     if type(sampsizes)==type({}):
         sampsizes = [ sampsizes[x] for x in ordlabs ]
-    if any( [ x>y for x,y in zip(sampsizes,nesizes) ] ):
-        raise ValueError("More samples than are in the population: "+str(zip(sampsizes,nesizes)))
-    diploids = [ sum(nesizes[:k])+j for k in xrange(len(sampsizes)) for j in xrange(sampsizes[k]) ]
-    pop = [ [ [ [ 0.0 ],  [ ploidy*k+j ] ] for j in xrange(ploidy) ] for k in diploids ]
+    diploids = [ k*maxne+j for k in xrange(len(sampsizes)) for j in xrange(sampsizes[k]) ]
+    pop = [ [ [ [ 0.0 ],  [ maxne*(k//maxne)+ploidy*(k%maxne)+j ] ] for j in xrange(ploidy) ] for k in diploids ]
     return pop
 
 
-def census(pop,sampsizes=None,ancne=None):
+def census(pop,sampsizes=None):
     '''Return number of individuals and number of breakpoints
     in each subpopulation.
     '''
     nchroms = sum( map( lambda u: len(u[0][0])+len(u[1][0]), pop ) )
     subpops = []
-    if sampsizes and ancne:
-        ordlabs = sorted(ancne.keys())  # ensure consistent order
+    if sampsizes:
+        ordlabs = sorted(sampsizes.keys())  # ensure consistent order
         k = 0
         for nsamps in [ sampsizes[x] for x in ordlabs ]:
             thispop = Counter()
             for j in xrange(k,k+nsamps):
                 for ii in xrange(ploidy):
-                    thispop.update( getsubpop(pop[j][ii][1],ancne) )
+                    thispop.update( getsubpop(pop[j][ii][1],ordlabs) )
             k = k+nsamps
             subpops.append( thispop )
     return nchroms, subpops
 
 
-def getsubpop(inds,ancne):
+def getsubpop(inds,ordlabs):
     '''Which subpopulation is a chromosome in?'''
-    ordlabs = sorted(ancne.keys())  # ensure consistent order
-    cumne = [ ancne[x] for x in ordlabs ]
-    cumne = [ sum(cumne[:k]) for k in xrange(len(cumne)+1) ]
-    subpops = [ 0 for k in inds ]
-    for k in xrange(len(ordlabs)):
-        for j in xrange(len(inds)):
-            if (inds[j]//ploidy) >= cumne[k+1]:
-                subpops[j] += 1
-    return [ ordlabs[k] for k in subpops ]
+    return [ ordlabs[ ind // maxne ] for ind in inds ]
 
 
 def sanity(pop,sampsizes=None,ancne=None,print_details=False):
@@ -110,7 +96,7 @@ def sanity(pop,sampsizes=None,ancne=None,print_details=False):
             print pop[ind]
             raise
     if not errors:
-        print "All good!", census(pop,sampsizes,ancne)
+        print "All good!", census(pop,sampsizes)
     else:
         print len(errors), "errors, oh dear!"
         return errors
@@ -135,8 +121,6 @@ def parentfactory(ancne,migprobs):
     '''
     if len(ancne)>1:
         ordlabs = sorted(ancne.keys())  # ensure consistent order
-        cumne = [ ancne[x] for x in ordlabs ]
-        cumne = [ sum(cumne[:k]) for k in xrange(len(cumne)+1) ]
         cumprobs = [ [ migprobs.get((x,y),0) for y in ordlabs ] for x in ordlabs ]
         # assign missing probabilities to diagonal
         totprobs = map( sum, cumprobs )
@@ -146,11 +130,8 @@ def parentfactory(ancne,migprobs):
             cumprobs[k][k] += 1-totprobs[k]
             cumprobs[k] = [ sum(cumprobs[k][:j+1]) for j in xrange(len(cumprobs[k])) ]
         def pickparent(ind):
-            x = 0
-            while ind>=cumne[x+1]:
-                x+=1
-            y = bisect.bisect_left( cumprobs[x], random.random() )
-            return cumne[y] + random.sample(xrange(ancne[ordlabs[y]]),1)[0]
+            y = bisect.bisect_left( cumprobs[ind//maxne], random.random() )
+            return y*maxne + random.sample(xrange(ancne[ordlabs[y]]),1)[0]
     else:
         def pickparent(ind):
             return random.sample(xrange(ancne.values()[0]),1)[0]
@@ -175,18 +156,18 @@ def parents(pop,ancne,migprobs,t=0,ibdict=None,writeto=None):
                     # anc[k] is the current ancestral chromosome; mapa is the diploid parent that chromosome came from
                     mapa = parentdict[ anc[k] ]
                 except KeyError:
-                    mapa = parentdict[ anc[k] ] = pickparent(anc[k]//ploidy)  # pickparent wants a diploid index
+                    mapa = parentdict[ anc[k] ] = pickparent(maxne*(anc[k]//maxne)+(anc[k]%maxne)//ploidy)  # pickparent wants a diploid index
                 # each haploid (e.g. anc[k]) is the product of a unique meiosis (between chromosomes of mapa)
                 recombs = recombdict[ anc[k] ]
                 # recombs[0] < ... < recombs[whichseg-1] < pos[k] <= recombs[whichseg]
                 whichseg = bisect.bisect_left( recombs, pos[k] )
                 if whichseg == len(recombs) or pos[k] != recombs[whichseg]:
                     newpos.append( pos[k] )
-                    newanc.append( mapa*ploidy + (whichseg%ploidy) )
+                    newanc.append( maxne*(mapa//maxne) + (mapa%maxne)*ploidy + (whichseg%ploidy) )
                 while whichseg < len(recombs) and ( k == (len(pos)-1) or recombs[whichseg] < pos[k+1] ):
                     newpos.append( recombs[whichseg] )
                     whichseg += 1
-                    newanc.append( mapa*ploidy + (whichseg%ploidy) )
+                    newanc.append( maxne*(mapa//maxne) + (mapa%maxne)*ploidy + (whichseg%ploidy) )
             pop[ind][ii] = newpos,newanc
     # all done!
     return None

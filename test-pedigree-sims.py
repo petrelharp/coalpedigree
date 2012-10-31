@@ -10,26 +10,27 @@ import coalpedigree as coal
 
 reload(coal)
 
-## Do one population, constant size
-
 random.seed(1234)
 
 sampsizes = dict( a=2, b=2 )
 migprobs = dict( [ (('a','b'),0.01),(('b','a'),0.01) ] )
-ancne = dict(a=10,b=10)
+# ancne = dict(a=10,b=10)
+def ancnefn(t):
+    return dict(a=max(10,100-5*t),b=10)
+
 coal.chrlens = ( 2.0, 1.0 )
 coal.chrpos = tuple( [ sum( coal.chrlens[0:k] ) for k in range(1,len(coal.chrlens)) ] )   # cumulative sum: position if lined up end-to-end
 coal.chrlen = sum(coal.chrlens)  # the last one (total length)
 
 start = time.time()
 
-pop = coal.initpop(sampsizes,ancne)
+pop = coal.initpop(sampsizes)
 ibdict = {}
 poplist = []
 for t in xrange(20):
     print " ----", t
-    coal.parents(pop,t=t,ibdict=ibdict,migprobs=migprobs,ancne=ancne)
-    coal.sanity(pop,sampsizes=sampsizes,ancne=ancne,print_details=True)
+    coal.parents(pop,t=t,ibdict=ibdict,migprobs=migprobs,ancne=ancnefn(t))
+    coal.sanity(pop,sampsizes=sampsizes,ancne=ancnefn(t),print_details=True)
     coal.writeibd(pop,minlen=0.0,gaplen=0.0,filename="test-fibd-"+("%(t)02d" % {'t':t})+".gz")
     poplist.append( copy.deepcopy(pop) )
 
@@ -140,7 +141,7 @@ import cProfile, pstats, trace
 stmt = '''
 sampsizes = dict( a=10, b=10 )
 ancne = dict(a=10000,b=10000)
-pop = coal.initpop(sampsizes,ancne)
+pop = coal.initpop(sampsizes)
 outfile = file("test.fibd.gz","w")
 migprobs = dict( [ (('a','b'),0.01),(('b','a'),0.01) ] )
 for t in xrange(40):

@@ -124,7 +124,7 @@ def catch_int(signal,frame):
 signal.signal( signal.SIGINT, catch_int )
 
 # initialize
-pop = coal.initpop(sampsizes,ancnefn(t=1))
+pop = coal.initpop(sampsizes)
 
 # sanity checks
 mignames = reduce( lambda x,y: x+y, [ [u,v] for (u,v) in migprobs(t=1).keys() ] )
@@ -160,14 +160,14 @@ logfile.write("Beginning ------------\n")
 for t in xrange(ngens):
     logfile.write("  t="+str(t)+"\n")
     if t%10==0:
-        logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
+        logfile.write("    census (num segments, num indivs): " + str(coal.census(pop,sampsizes=sampsizes))+ "\n")
     logfile.flush()
     coal.parents(pop,ancne=ancnefn(t),migprobs=migprobs(t),t=t)
     if _exitnow:
         # there's been a ctrl-c; stop now.
         break
 
-logfile.write("    census (num indivs, num segments): " + str(coal.census(pop))+ "\n")
+logfile.write("    census (num indivs, num segments): " + str(coal.census(pop,sampsizes=sampsizes))+ "\n")
 logfile.write("Done with simulation at " + time.strftime("%d %h %Y %H:%M:%S", time.localtime()) + "; now writing out IBD info.\n" )
 
 coal.writeibd(pop,minlen=minlen,gaplen=gaplen,outfile=ibdfile)
