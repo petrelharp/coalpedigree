@@ -58,12 +58,61 @@ predict.blocks <- function ( L, opts ) {
     return( (blocklens) )
 }
 
+# make stuff easier functions
 
-plot.ans <- function (anslist,opts,thispair,L,...) {
+loadblocks <- function ( opts, ploidy=2 ) {
+    blocks <- read.table(opts$ibdfile,header=TRUE,sep=" ")
+    # blocks$id1.orig <- blocks$id1
+    # blocks$id2.orig <- blocks$id2
+    blocks$id1 <- blocks$id1 %/% ploidy
+    blocks$id2 <- blocks$id2 %/% ploidy
+    blocks$chrom <- findInterval( blocks$start, .chrstarts/100 )
+    blocks$mapstart <- blocks$start*100 - .chrstarts[blocks$chrom]  # these sims have recorded in cumulative distance
+    blocks$mapend <- blocks$end*100 - .chrstarts[blocks$chrom]
+    blocks$maplen <- with(blocks, mapend-mapstart)
+    blocks$country1 <- names(opts$sampsizes)[ findInterval( blocks$id1, cumsum( c(0, unlist( opts$sampsizes ) ) ) ) ]
+    blocks$country2 <- names(opts$sampsizes)[ findInterval( blocks$id2, cumsum( c(0, unlist( opts$sampsizes ) ) ) ) ]
+    blocks$countrypair <- with( blocks, ifelse(country1<country2,paste(country1,country2,sep="-"),paste(country2,country1,sep="-")) )
+    return(blocks)
+}
+
+init.sinv <- function( lendist, lenbins, npairs, L, fp ) {
+    S <- as.vector(smooth(lendist))
+    S <- pmax(1e-4, S/mean(S) )
+    # tail of S becomes 0
+    est.Sigma <- function ( np, X, alpha=100 ) {
+        # estimate Sigma by combining the population average with the smoothed, observed data
+        # where Sigma is the covariance matrix of X/np
+        smX <- as.vector( smooth(X) )
+        ppp <- (alpha*np/(npairs+alpha*np))  # 2543640 = total # pairs
+        Sigma <- ppp*smX + (1-ppp)*sum(smX)*S/sum(S)
+        return( Sigma/np^2 )
+    }
+    Ksvd <- svd( 1/sqrt(as.vector(S)) * L )
+    linverse <- linv( X=lendist/npairs, S=as.vector(S), Sigma=est.Sigma(np=npairs,X=lendist), Ksvd=Ksvd, maxk=30, fp=fp )
+    return( smoothed.nonneg( lS=linverse, Ksvd=Ksvd, bestk=15, lam=1 ) )
+}
+
+
+plot.ans <- function (anslist,opts,thispair,L,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), ...) {
     # plot nice stuff about a named list of sinv objects
+    if ('opts'%in%names(anslist) & missing(opts)) { opts <- anslist[['opts']] }
+    if ('L'%in%names(anslist) & missing(L)) { L <- anslist[['L']] }
+    if ('anslist'%in%names(anslist)) { anslist <- anslist[['anslist']] }
     if (!missing(thispair) & thispair %in% names(anslist)) { anslist <- anslist[[thispair]] }
+    if (missing(dothese)) { dothese <- names(anslist) }
+    if (is.null(names(dothese))) { names(dothese) <- dothese }
+    if (missing(main) & !missing(thispair)) {
+        main <- thispair
+    } else if (missing(main)) {
+        main <- ""
+    } else if (length(main)==1) { main <- rep(main,2) }
     npairs <- outer(opts$sampsizes,opts$sampsizes,"*")
     diag(npairs) <- choose(opts$sampsizes,2)
+    gens <- attr(L,"gens")
+    lenbins <- attr(L,"lenbins")
+    midbins <- c( lenbins[-1]-diff(lenbins)/2, lenbins[length(lenbins)] )
+    binsizes <- diff(c(lenbins,max(.chrlens)))
     coal <- coalprob(gens%/%2,opts) 
     cdn <- dimnames(coal)
     dim(coal) <- c(dim(coal)[1],prod(dim(coal)[-1]))
@@ -80,24 +129,92 @@ plot.ans <- function (anslist,opts,thispair,L,...) {
         coal <- coal[,thispair]
         predicted <- predicted[,thispair]
     }
-    # coalescent rates
-    tcols <- rainbow_hcl(length(anslist))
-    plot( gens*30/2, anslist[[1]]$par, type='n', ylab="", xlab="years ago", main=thispair, ... )
-    for (k in 1:length(anslist)) {
-        polygon( c(gens,rev(gens))*30/2, c(anslist[[k]]$par,rep(0,length(gens))), col=adjustcolor(tcols[k],.4) )
+    coalvals <- cbind( data.frame(theoretical=coal), sapply(dothese, function (x) anslist[[match(x,names(anslist))]]$par) )
+    # plot coalescent rates or number of ancestors?
+    if (coalrate) {
+        coallab <- "coal rate"
+    } else {
+        coalvals <- lapply( coalvals, coal.to.anc, gens )
+        coallab <- "# shared ancestors"
     }
-    lines( gens*30, coal, col='green', lwd=2 )  # generations
-    if (is.numeric(opts$ngens)) { abline(v=opts$ngens*30) }
-    legend("topleft",fill=tcols,legend=names(anslist))
+    spectra <- cbind( data.frame("theoretical"=predicted/binsizes, "observed"=anslist[[1]]$lendist/binsizes), 
+                sapply(dothese, function (x) with(anslist[[x]], (npairs * (L%*%par))/binsizes ) )
+            )
+    ### BEGIN PLOTTING
+    if ("coal" %in% plots) {
+        plot( gens*30/2, rowMeans(coalvals), type='n', ylab=coallab, xlab="years ago", main=main[1], ... )
+        for (k in seq_along(dothese)) {
+            polygon( c(gens,rev(gens))*30/2, c(coalvals[[names(dothese)[k]]],rep(0,length(gens))), col=adjustcolor(tcols[k],.4) )
+        }
+        lines( gens*30/2, coalvals$theoretical, col='green', lwd=2 )  # generations
+        if (is.numeric(opts$ngens)) { abline(v=opts$ngens*30) }
+        if (legend1) { legend("topright", fill=c(NA,tcols[seq_along(dothese)]), border=c("green",rep("black",length(dothese))), legend=c("theoretical",names(dothese)) ) }
+    }
     # predicted and observed blocks
-    plot( midbins, predicted/binsizes, type='l', col='green', lwd=2, log='xy' )
-    lines( midbins, anslist[[1]]$lendist/binsizes )
-    for (k in 1:length(anslist)) {
-        with( anslist[[k]], lines( midbins, (npairs * (L%*%par))/binsizes, col=tcols[k] ) )
+    if ("spectrum" %in% plots) {
+        plot( midbins, spectra$theoretical/npairs, type='l', col='green', lwd=2, log='xy', xlab="block length (cM)", ylab="density", main=main[2])
+        lines( midbins, spectra$observed/npairs )
+        for (k in match(dothese,names(anslist))) {
+            lines( midbins, spectra[[names(dothese)[k]]]/npairs, col=tcols[k] )
+        }
+        if (legend2) { legend("topright", lty=1, lwd=c(2,1,rep(1,length(anslist))), col=c("green","black",tcols[seq_along(dothese)]), legend=c("theoretical","observed",names(anslist))) }
     }
-    legend("topright", lty=1, lwd=c(2,1,rep(1,length(anslist))), col=c("green","black",tcols), legend=c("theoretical","observed",names(anslist)))
-    return( invisible( list(coal=coal, predicted=predicted ) ) )
+    return( invisible( list(gens=gens, coal=coalvals, midbins=midbins, spectra=spectra, npairs=npairs ) ) )
 }
+
+do.everything <- function (prefix,minblocklen,fprate=function(x)0,maxgen) {
+    opts <- simopts[[prefix]]  # of note is nesize and ngens
+    blocks <- loadblocks(opts)
+    if (missing(minblocklen)) { minblocklen <- opts$minlen }
+    if (missing(maxgen)) { maxgen <- opts$ngens }
+
+    indivinfo <- data.frame( SUBJID=1:sum(opts$sampsizes)-1, COUNTRY_SELF=names(opts$sampsizes)[unlist(lapply(1:length(opts$sampsizes),function(k) rep(k,opts$sampsizes[k])))] )
+    nsamples <- table(indivinfo$COUNTRY_SELF)
+    npairs <- outer(nsamples,nsamples,"*")
+    diag(npairs) <- choose(nsamples,2)
+    names(npairs) <- paste( names(nsamples)[row(npairs)], names(nsamples)[col(npairs)], sep="-" )
+    npairs <- npairs[upper.tri(npairs,diag=TRUE)]
+
+    # get a good discretization
+    nbins <- 100
+    maxbinsize <- 1
+    lenbins <- with( subset(blocks,maplen>minblocklen), quantile( maplen, probs=seq(0,1,length.out=nbins+1) ) )
+    lenbins <- c( lenbins[c(diff(lenbins)<maxbinsize,FALSE)], seq( lenbins[max(which(diff(lenbins)<maxbinsize))+1], max(lenbins), maxbinsize ) )
+    lenbins <- lenbins[-length(lenbins)]
+    lenbins[1] <- minblocklen
+    binsizes <- diff(c(lenbins,max(.chrlens)))
+    midbins <- c( lenbins[-1]-diff(lenbins)/2, lenbins[length(lenbins)] )
+    maxbin <- 5*ceiling(max(blocks$maplen)/5)
+
+    lendist <- do.call( cbind, with( subset(blocks,maplen>minblocklen), tapply( maplen, countrypair, function (x) hist(x, breaks=c(lenbins,maxbin), plot=FALSE)$counts ) ) )
+
+    # gens <- cumsum( rep(1:36, each=10) )
+    gens <- 1:(2*maxgen)
+    L <- theoretical.operator( lenbins=lenbins, gens=gens, chrlens=.chrlens )
+    fp <- rep(0, length(lenbins))
+
+    # add in unaccounted-for false positives
+    predicted.blocklens <- predict.blocks( L, opts )
+    oops <- rpois( length(lendist), fprate(midbins)*predicted.blocklens )
+    true.lendist <- lendist
+    lendist <- lendist + oops
+
+    sminverse <- init.sinv(rowSums(lendist), lenbins, sum(npairs), L, fp)
+    ans <- sinv( rowSums(lendist), xinit=sminverse, L, fp, npairs=sum(npairs), lam=0, gamma=1e6 )
+
+    bothans <- lapply( colnames(lendist), function (x) {
+            noconstraints <- sinv( lendist[,x], xinit=ans, L, fp, npairs=npairs[x], gamma=10, lam=10 )
+            list(
+                pointy = noconstraints,
+                smooth = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, fitfn="loglik", relthresh=2/npairs[x] ),
+                smoother = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, fitfn="loglik", relthresh=4/npairs[x] )
+            ) }
+        )
+    names(bothans) <- colnames(lendist)
+    return( list(opts=opts, anslist=bothans, L=L, fp=fp, npairs=npairs ) )
+}
+
+
 
 
 ## automatically get stuff out of python dict text format
