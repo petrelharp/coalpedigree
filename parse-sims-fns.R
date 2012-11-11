@@ -38,7 +38,7 @@ coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob, plo
 }
 
 
-predict.blocks <- function ( L, opts ) {
+predict.blocks <- function ( L, opts, times=FALSE ) {
     # L gives number of blocks per constant rate of coalescence in windows of numbers of *meioses*;
     #  coalprob works in 2*meioses (generations) here; so half of these are zero;
     #  here we put in those zeros.
@@ -52,9 +52,15 @@ predict.blocks <- function ( L, opts ) {
     diag(npairs) <- choose(sampsize,2)
     coal <- coal * rep(npairs, each=dim(coal)[1])
     dim(coal) <- c( dim(coal)[1], length(coal)/dim(coal)[1] )
-    coal <- coal[,upper.tri(npairs,diag=TRUE)]
-    blocklens <- L%*%coal
-    colnames(blocklens) <- paste( rownames(npairs)[row(npairs)], colnames(npairs)[col(npairs)], sep="-" )[upper.tri(npairs,diag=TRUE)] 
+    coal <- coal[,upper.tri(npairs,diag=TRUE),drop=FALSE]
+    if (times) {
+         blocklens <- L * rep(coal,each=nrow(L))
+         dim(blocklens) <- c(dim(L),dim(coal)[2])
+         dimnames(blocklens) <- list( NULL, NULL, paste( rownames(npairs)[row(npairs)], colnames(npairs)[col(npairs)], sep="-" )[upper.tri(npairs,diag=TRUE)] )
+    } else {
+        blocklens <- L%*%coal
+        colnames(blocklens) <- paste( rownames(npairs)[row(npairs)], colnames(npairs)[col(npairs)], sep="-" )[upper.tri(npairs,diag=TRUE)] 
+    }
     return( (blocklens) )
 }
 
@@ -94,24 +100,25 @@ init.sinv <- function( lendist, lenbins, npairs, L, fp ) {
 }
 
 
-plot.ans <- function (anslist,opts,thispair,L,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), ...) {
+plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), ...) {
     # plot nice stuff about a named list of sinv objects
-    if ('opts'%in%names(anslist) & missing(opts)) { opts <- anslist[['opts']] }
-    if ('L'%in%names(anslist) & missing(L)) { L <- anslist[['L']] }
+    if (missing(opts) && 'opts'%in%names(anslist)) { opts <- anslist[['opts']] }
+    if ( missing(L) && 'L'%in%names(anslist) ) { L <- anslist[['L']] }
     if ('anslist'%in%names(anslist)) { anslist <- anslist[['anslist']] }
-    if (!missing(thispair) & thispair %in% names(anslist)) { anslist <- anslist[[thispair]] }
-    if (missing(dothese)) { dothese <- names(anslist) }
+    if ( (!missing(thispair)) && (thispair %in% names(anslist))) { anslist <- anslist[[thispair]] }
+    if (missing(dothese)) { dothese <- names(anslist)[sapply(anslist,class)=="sinv"] }
     if (is.null(names(dothese))) { names(dothese) <- dothese }
-    if (missing(main) & !missing(thispair)) {
+    if (missing(main) && !missing(thispair)) {
         main <- thispair
     } else if (missing(main)) {
         main <- ""
     } else if (length(main)==1) { main <- rep(main,2) }
+    if (genscale) { timescale <- 1/2 } else { timescale <- 29/2 }
     npairs <- outer(opts$sampsizes,opts$sampsizes,"*")
     diag(npairs) <- choose(opts$sampsizes,2)
     gens <- attr(L,"gens")
     lenbins <- attr(L,"lenbins")
-    midbins <- c( lenbins[-1]-diff(lenbins)/2, lenbins[length(lenbins)] )
+    midbins <- c(lenbins,max(.chrlens))[-1]-diff(c(lenbins,max(.chrlens)))/2
     binsizes <- diff(c(lenbins,max(.chrlens)))
     coal <- coalprob(gens%/%2,opts) 
     cdn <- dimnames(coal)
@@ -129,25 +136,25 @@ plot.ans <- function (anslist,opts,thispair,L,coalrate=TRUE,dothese,main,legend1
         coal <- coal[,thispair]
         predicted <- predicted[,thispair]
     }
-    coalvals <- cbind( data.frame(theoretical=coal), sapply(dothese, function (x) anslist[[match(x,names(anslist))]]$par) )
+    coalvals <- data.frame(c( list(theoretical=coal), lapply(dothese, function (x) anslist[[match(x,names(anslist))]]$par) ))
     # plot coalescent rates or number of ancestors?
     if (coalrate) {
         coallab <- "coal rate"
     } else {
-        coalvals <- lapply( coalvals, coal.to.anc, gens )
+        coalvals <- data.frame( lapply( coalvals, coal.to.anc, gens ) )
         coallab <- "# shared ancestors"
     }
-    spectra <- cbind( data.frame("theoretical"=predicted/binsizes, "observed"=anslist[[1]]$lendist/binsizes), 
-                sapply(dothese, function (x) with(anslist[[x]], (npairs * (L%*%par))/binsizes ) )
-            )
+    spectra <- data.frame( c( list("theoretical"=predicted/binsizes, "observed"=anslist[[1]]$lendist/binsizes), 
+                lapply(dothese, function (x) with(anslist[[x]], (npairs * (L%*%par))/binsizes ) )
+            ) )
     ### BEGIN PLOTTING
     if ("coal" %in% plots) {
-        plot( gens*30/2, rowMeans(coalvals), type='n', ylab=coallab, xlab="years ago", main=main[1], ... )
+        plot( gens*timescale, rowMeans(coalvals), type='n', ylab=coallab, xlab=if(genscale){"generations ago"} else {"years ago"}, main=main[1], ... )
         for (k in seq_along(dothese)) {
-            polygon( c(gens,rev(gens))*30/2, c(coalvals[[names(dothese)[k]]],rep(0,length(gens))), col=adjustcolor(tcols[k],.4) )
+            polygon( c(gens,rev(gens))*timescale, c(coalvals[[names(dothese)[k]]],rep(0,length(gens))), col=adjustcolor(tcols[k],.4) )
         }
-        lines( gens*30/2, coalvals$theoretical, col='green', lwd=2 )  # generations
-        if (is.numeric(opts$ngens)) { abline(v=opts$ngens*30) }
+        lines( gens*timescale, coalvals$theoretical, col='green', lwd=2 )  # generations
+        if (is.numeric(opts$ngens)) { abline(v=opts$ngens*timescale*2) }
         if (legend1) { legend("topright", fill=c(NA,tcols[seq_along(dothese)]), border=c("green",rep("black",length(dothese))), legend=c("theoretical",names(dothese)) ) }
     }
     # predicted and observed blocks
@@ -159,10 +166,10 @@ plot.ans <- function (anslist,opts,thispair,L,coalrate=TRUE,dothese,main,legend1
         }
         if (legend2) { legend("topright", lty=1, lwd=c(2,1,rep(1,length(anslist))), col=c("green","black",tcols[seq_along(dothese)]), legend=c("theoretical","observed",names(anslist))) }
     }
-    return( invisible( list(gens=gens, coal=coalvals, midbins=midbins, spectra=spectra, npairs=npairs ) ) )
+    return( invisible( list(gens=gens, coal=coalvals, midbins=midbins, spectra=spectra, npairs=npairs, lenbins=lenbins ) ) )
 }
 
-do.everything <- function (prefix,minblocklen,fprate=function(x)0,maxgen) {
+do.everything <- function (prefix,minblocklen,fprate=function(x)0,maxgen,genbins=NULL) {
     opts <- simopts[[prefix]]  # of note is nesize and ngens
     blocks <- loadblocks(opts)
     if (missing(minblocklen)) { minblocklen <- opts$minlen }
@@ -206,8 +213,10 @@ do.everything <- function (prefix,minblocklen,fprate=function(x)0,maxgen) {
             noconstraints <- sinv( lendist[,x], xinit=ans, L, fp, npairs=npairs[x], gamma=10, lam=10 )
             list(
                 pointy = noconstraints,
-                smooth = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, fitfn="loglik", relthresh=2/npairs[x] ),
-                smoother = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, fitfn="loglik", relthresh=4/npairs[x] )
+                smooth = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, relthresh=2/npairs[x] ),
+                smoother = squoosh( lendist[,x], xinit=noconstraints, L, fp, npairs=npairs[x], gamma=100, lam=0, relthresh=4/npairs[x] ),
+                lower.bounds <- lapply( genbins, function (gb) squoosh( lendist[,x], npairs[x], xinit=noconstraints, L, fp, lam=0, gamma=0, del=1, delvec=( (gens>=gb[1]) & (gens<gb[2]) ) ) ),
+                upper.bounds <- lapply( genbins, function (gb) squoosh( lendist[,x], npairs[x], xinit=noconstraints, L, fp, lam=0, gamma=0, del=1, delvec=( (gens<gb[1]) | (gens>=gb[2]) ) ) )
             ) }
         )
     names(bothans) <- colnames(lendist)
