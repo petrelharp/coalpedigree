@@ -20,7 +20,7 @@ decayrate = math.log(9)/11
 bigsize = 800000
 growthtime = 60
 growthrate = math.log(29)/30
-oldsize = 10000
+oldsize = 40000
 
 
 def ancnefn(t):
