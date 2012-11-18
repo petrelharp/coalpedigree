@@ -37,6 +37,13 @@ coalprob <- function ( gens, opts, nesize=opts$nesize, migprob=opts$migprob, plo
     return(coal[match(gens,1:max(gens)),,,drop=FALSE])
 }
 
+mergerate <- function ( x, L, opts, minminlen=0.1, gaplen=5 ) {
+    # approx for the proportion of falsely merged blocks
+    thesegens <- 1:(max(attr(L,"gens"))/2)
+    coalgens <- coalprob(thesegens,opts)
+    f <- function (t,x) { ( gaplen*t/100*(1+x*t/100) - 2*(1+x*t/100+(1/2)*(x*t/100)^2) )*exp(-x*t/100) }
+    sum( sqrt(2)*sum(.chrlens-x)*(2*thesegens/100)*( f(2*thesegens,x)-f(2*thesegens,2*minminlen) ) * coalgens )
+}
 
 predict.blocks <- function ( L, opts, times=FALSE ) {
     # L gives number of blocks per constant rate of coalescence in windows of numbers of *meioses*;
@@ -100,7 +107,7 @@ init.sinv <- function( lendist, lenbins, npairs, L, fp ) {
 }
 
 
-plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), ...) {
+plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), spectrum.xlim, spectrum.ylim, ...) {
     # plot nice stuff about a named list of sinv objects
     if (missing(opts) && 'opts'%in%names(anslist)) { opts <- anslist[['opts']] }
     if ( missing(L) && 'L'%in%names(anslist) ) { L <- anslist[['L']] }
@@ -159,7 +166,9 @@ plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothes
     }
     # predicted and observed blocks
     if ("spectrum" %in% plots) {
-        plot( midbins, spectra$theoretical/npairs, type='l', col='green', lwd=2, log='xy', xlab="block length (cM)", ylab="density", main=main[2])
+        if (missing(spectrum.xlim)) { spectrum.xlim <- range(midbins[is.finite(log(midbins))]) }
+        if (missing(spectrum.ylim)) { spectrum.ylim <- range((spectra$theoretical/npairs)[is.finite(log(spectra$theoretical/npairs))]) }
+        plot( midbins, spectra$theoretical/npairs, type='l', col='green', lwd=2, log='xy', xlab="block length (cM)", ylab="density", main=main[2], xlim=spectrum.xlim, ylim=spectrum.ylim )
         lines( midbins, spectra$observed/npairs )
         for (k in match(dothese,names(anslist))) {
             lines( midbins, spectra[[names(dothese)[k]]]/npairs, col=tcols[k] )
