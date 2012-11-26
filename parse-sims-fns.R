@@ -161,7 +161,7 @@ plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothes
             polygon( c(gens,rev(gens))*timescale, c(coalvals[[names(dothese)[k]]],rep(0,length(gens))), col=adjustcolor(tcols[k],.4) )
         }
         lines( gens*timescale, coalvals$theoretical, col='green', lwd=2 )  # generations
-        if (is.numeric(opts$ngens)) { abline(v=opts$ngens*timescale*2) }
+        if (is.numeric(opts$ngens)) { abline(v=opts$ngens*timescale*2, col='grey', lty=2) }
         if (legend1) { legend("topright", fill=c(NA,tcols[seq_along(dothese)]), border=c("green",rep("black",length(dothese))), legend=c("theoretical",names(dothese)) ) }
     }
     # predicted and observed blocks
