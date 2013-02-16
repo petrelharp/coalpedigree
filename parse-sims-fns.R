@@ -107,13 +107,14 @@ init.sinv <- function( lendist, lenbins, npairs, L, fp ) {
 }
 
 
-plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols=rainbow_hcl(length(anslist)), plots=c("coal","spectrum"), spectrum.xlim, spectrum.ylim, ...) {
+plot.ans <- function (anslist,opts,thispair,L,genscale=TRUE,coalrate=TRUE,dothese,main,legend1=TRUE,legend2=FALSE, tcols, plots=c("coal","spectrum"), spectrum.xlim, spectrum.ylim, ...) {
     # plot nice stuff about a named list of sinv objects
     if (missing(opts) && 'opts'%in%names(anslist)) { opts <- anslist[['opts']] }
     if ( missing(L) && 'L'%in%names(anslist) ) { L <- anslist[['L']] }
     if ('anslist'%in%names(anslist)) { anslist <- anslist[['anslist']] }
     if ( (!missing(thispair)) && (thispair %in% names(anslist))) { anslist <- anslist[[thispair]] }
     if (missing(dothese)) { dothese <- names(anslist)[sapply(anslist,class)=="sinv"] }
+    if (missing(tcols)) { tcols <- rainbow_hcl(length(dothese)) }
     if (is.null(names(dothese))) { names(dothese) <- dothese }
     if (missing(main) && !missing(thispair)) {
         main <- thispair
